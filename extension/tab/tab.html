@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Style Dashboard - Virtual Try-On Extension</title>
+    <link rel="stylesheet" href="tab.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">👕</span>
+                    <h1>AI Style Dashboard</h1>
+                </div>
+                <p class="tagline">Discover your personal style with AI-powered analysis</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Photo Upload Section -->
+            <section class="upload-section">
+                <h2>Upload Your Photos</h2>
+                <p>Upload 3-5 photos of yourself in different outfits for AI style analysis</p>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-placeholder">
+                        <span class="upload-icon">📸</span>
+                        <p>Click to upload photos or drag & drop here</p>
+                        <small>Max 5 photos, 5MB each (JPG, PNG, WebP)</small>
+                    </div>
+                    <input type="file" id="photoInput" multiple accept="image/jpeg,image/jpg,image/png,image/webp" style="display: none;">
+                </div>
+                
+                <div class="photo-gallery" id="photoGallery">
+                    <!-- Uploaded photos will appear here -->
+                </div>
+                
+                <div class="photo-controls" style="margin-top: 15px;">
+                    <button id="clearAllBtn" class="clear-btn" style="display: none;">Clear All Photos</button>
+                    <button id="clearProfileBtn" class="clear-btn" style="display: none; margin-left: 10px;">Clear Style Profile</button>
+                </div>
+            </section>
+
+            <!-- Style Analysis Section -->
+            <section class="analysis-section">
+                <h2>Your Style Profile</h2>
+                <div class="analysis-content" id="analysisContent">
+                    <div class="placeholder-state">
+                        <span class="placeholder-icon">🎨</span>
+                        <p>Upload photos to generate your AI-powered style profile</p>
+                        <button id="analyzeBtn" class="analyze-btn" disabled>
+                            Analyze My Style
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="settings-section">
+                <h2>Settings</h2>
+                <div class="settings-content">
+                    <div class="setting-item">
+                        <label>
+                            <span>Chrome AI Status:</span>
+                            <span id="aiStatus" class="status-indicator">Checking...</span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <label>
+                            <span>Filter Sensitivity:</span>
+                            <input type="range" id="sensitivitySlider" min="1" max="10" value="7">
+                            <span id="sensitivityValue">7</span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <button id="testAIBtn" class="test-ai-btn">Test Chrome AI</button>
+                        <div id="aiTestResult" class="ai-test-result" style="display: none;"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Powered by Chrome Built-in AI & Gemini Developer API</p>
+        </footer>
+    </div>
+
+    <!-- HEIC support temporarily disabled -->
+    <!-- <script src="../lib/heic2any.min.js"></script> -->
+    <script src="tab.js"></script>
+</body>
+</html>
