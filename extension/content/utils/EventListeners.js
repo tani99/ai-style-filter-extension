@@ -182,13 +182,11 @@ export class EventListeners {
                 console.log('🔄 Navigation detected, reinitializing...', lastUrl);
 
                 // Update page type detection
-                this.contentScript.pageType = this.contentScript.detectPageType();
+                this.contentScript.pageType = this.contentScript.pageTypeDetector.detectPageType();
 
-                // Reinitialize for new page
+                // Clear and reinitialize for new page
+                this.contentScript.clearProductDetection();
                 this.contentScript.initializeForPageType();
-
-                // Update indicator
-                this.contentScript.addExtensionIndicator();
 
                 // Re-run product detection after navigation
                 setTimeout(async () => {
@@ -215,9 +213,9 @@ export class EventListeners {
 
                     console.log('🔄 Popstate navigation detected, reinitializing...', lastUrl);
 
-                    this.contentScript.pageType = this.contentScript.detectPageType();
+                    this.contentScript.pageType = this.contentScript.pageTypeDetector.detectPageType();
+                    this.contentScript.clearProductDetection();
                     this.contentScript.initializeForPageType();
-                    this.contentScript.addExtensionIndicator();
 
                     // Re-run product detection after popstate navigation
                     setTimeout(async () => {
@@ -265,7 +263,7 @@ export class EventListeners {
             if (hasNewImages) {
                 console.log('🖼️ New images detected, checking for new products...');
                 setTimeout(async () => {
-                    await this.contentScript.detectNewProductImages();
+                    await this.contentScript.detectNewImages();
                 }, 500);
             }
         });
@@ -290,7 +288,7 @@ export class EventListeners {
                 if (hasNewVisibleImages) {
                     console.log('👁️ New images scrolled into view, checking for products...');
                     setTimeout(async () => {
-                        await this.contentScript.detectNewProductImages();
+                        await this.contentScript.detectNewImages();
                     }, 1000);
                 }
             });
@@ -313,4 +311,8 @@ export class EventListeners {
         this.setupNavigationListener();
         this.setupLazyLoadingDetection();
     }
+}
+// Also expose on window for backward compatibility
+if (typeof window !== 'undefined') {
+    window.EventListeners = EventListeners;
 }

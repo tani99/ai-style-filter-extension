@@ -11,7 +11,7 @@ This is a Chrome Manifest V3 extension that creates an AI-powered style-based sh
 ### Core Components
 
 - **Background Service Worker** (`background/background.js`): Handles extension lifecycle, storage, and inter-component messaging
-- **Content Script** (`content/content.js`): Injected into e-commerce sites for product detection and filtering
+- **Content Script** (`content/content-consolidated.js`): Modular architecture injected into e-commerce sites for product detection and filtering
 - **Extension Tab** (`tab/`): Full-page dashboard for style profile management and photo uploads
 - **Popup Interface** (`popup/`): Quick access toolbar popup
 
@@ -42,9 +42,9 @@ The extension uses a multi-layered AI detection system:
 # 3. Click "Load unpacked" and select /extension folder
 
 # Test content script functionality (in browser console on supported sites)
-styleFilter.detectProductImages()
-styleFilter.enableDebugMode()
-styleFilter.debugPageStructure()
+window.contentScript.detectProductImages()
+window.contentScript.enableDebugMode()
+window.contentScript.debugPageStructure()
 ```
 
 ### Testing Specific Features
@@ -53,13 +53,13 @@ styleFilter.debugPageStructure()
 window.ai.canCreateTextSession()
 
 # Test image detection with logging
-styleFilter.detectProductImages()  # Shows detailed per-image analysis
+window.contentScript.detectProductImages()  # Shows detailed per-image analysis
 
 # Clear all detection indicators
-styleFilter.clearProductDetection()
+window.contentScript.clearProductDetection()
 
 # Get detection statistics
-styleFilter.getDetectionStats()
+window.contentScript.getDetectionStats()
 ```
 
 ## Key Technical Concepts
@@ -71,7 +71,8 @@ The content script automatically detects supported e-commerce sites using hostna
 Unlike traditional keyword-based detection, the system uses Chrome's built-in AI APIs:
 - **Language Model**: Analyzes alt text to understand image content
 - **Image Classifier**: Performs visual analysis of actual image pixels
-- **Confidence Scoring**: Provides percentage confidence for decisions
+- **Style Matching**: AI-powered compatibility analysis comparing products to user style profiles
+- **Confidence Scoring**: Provides percentage confidence for decisions across all AI analyses
 
 ### Visual Indicator System
 Product images are marked with positioned overlay elements (not CSS box-shadows) to avoid cropping issues. Overlays use absolute positioning and update on scroll/resize events.
@@ -83,24 +84,61 @@ User photos and generated style profiles persist across browser sessions using `
 
 ```
 /extension/
-├── manifest.json          # Manifest V3 configuration with site permissions
+├── manifest.json                    # Manifest V3 configuration with site permissions
 ├── background/
-│   └── background.js      # Service worker for lifecycle & messaging
+│   └── background.js               # Service worker for lifecycle & messaging
 ├── content/
-│   └── content.js         # Main detection logic (StyleFilterContentScript class)
-├── popup/                 # Toolbar popup interface
-├── tab/                   # Full dashboard (photo upload, style analysis)
+│   ├── content-consolidated.js     # Main consolidated content script file
+│   ├── content.js.backup           # LEGACY: Pre-refactor monolithic code (DO NOT USE)
+│   ├── ai/                        # AI analysis modules
+│   │   ├── AIAnalysisEngine.js    # Core AI processing engine
+│   │   ├── AltTextAnalyzer.js     # Alt text analysis
+│   │   ├── ImageClassifier.js     # Visual image classification
+│   │   ├── StyleMatcher.js        # Style matching logic
+│   │   └── AnalysisCache.js       # Analysis result caching
+│   ├── core/                      # Core functionality modules
+│   │   ├── ContentScriptManager.js # Main content script coordination
+│   │   ├── SiteDetector.js        # E-commerce site detection
+│   │   └── PageTypeDetector.js    # Page type classification
+│   ├── config/
+│   │   └── SiteConfigurations.js  # Site-specific configurations
+│   ├── detection/                 # Product detection modules
+│   ├── ui/                        # User interface modules
+│   │   ├── VisualIndicators.js    # Visual overlay management
+│   │   ├── DebugInterface.js      # Debug mode interface
+│   │   └── LoadingAnimations.js   # Loading state animations
+│   └── utils/                     # Utility modules
+│       ├── DOMUtils.js            # DOM manipulation utilities
+│       ├── GeometryUtils.js       # Geometry calculations
+│       └── EventListeners.js      # Event handling
+├── popup/                         # Toolbar popup interface
+├── tab/                          # Full dashboard (photo upload, style analysis)
+├── icons/                        # Extension icons
 └── lib/
-    └── heic2any.min.js   # HEIC image format support
+    └── heic2any.min.js           # HEIC image format support
 ```
 
+### Content Script Refactoring History
+
+The `content.js.backup` file contains the original monolithic content script code before the modular refactoring. This file is **kept for reference only** and is **not loaded by the extension**.
+
+**All active functionality is now in:**
+- `content-consolidated.js` (main entry point)
+- Modular components in `ai/`, `core/`, `detection/`, `ui/`, `utils/`, and `config/` directories
+
+The refactoring separated concerns into specialized modules for better maintainability, testability, and code organization. When making changes to the content script functionality, **always modify the modular files**, never the backup file.
+
 ### Content Script Architecture
-The `StyleFilterContentScript` class handles:
-- Site detection and page type classification
-- Multi-layered AI image analysis pipeline
-- Visual indicator management with overlay positioning
-- Dynamic content loading (SPA navigation, lazy loading)
-- Debug mode with detailed per-image logging
+The modular content script architecture includes:
+
+- **ContentScriptManager**: Main coordination and lifecycle management
+- **SiteDetector & PageTypeDetector**: E-commerce site recognition and page classification
+- **AIAnalysisEngine**: Core AI processing with multi-layered analysis pipeline
+- **StyleMatcher**: AI-powered style compatibility analysis using user profiles
+- **ImageClassifier & AltTextAnalyzer**: Specialized AI modules for visual and text analysis
+- **VisualIndicators**: Overlay management with absolute positioning
+- **AnalysisCache**: Performance optimization through result caching
+- **DebugInterface**: Comprehensive logging and debugging tools
 
 ### Storage Schema
 ```javascript

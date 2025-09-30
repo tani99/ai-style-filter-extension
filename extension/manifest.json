@@ -26,7 +26,7 @@
         "*://*.hm.com/*",
         "*://*.nike.com/*"
       ],
-      "js": ["content/content-consolidated.js"],
+      "js": ["content/content.generated.js"],
       "run_at": "document_end"
     }
   ],

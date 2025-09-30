@@ -1,0 +1,12 @@
+{
+  "name": "ai-style-filter-extension",
+  "version": "1.0.0",
+  "description": "AI Style-Based Shopping Filter + Virtual Try-On Chrome Extension",
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.19.0"
+  }
+}

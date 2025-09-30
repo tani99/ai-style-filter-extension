@@ -2,14 +2,12 @@ import { GeometryUtils } from '../utils/GeometryUtils.js';
 
 /**
  * VisualIndicators manages overlay elements that highlight detected products
- * and provide visual feedback on product analysis results
  */
 export class VisualIndicators {
     constructor(debugMode = false) {
         this.debugMode = debugMode;
         this.overlayMap = new Map(); // Track overlays by image element
         this.updateHandlers = new Map(); // Track event handlers for cleanup
-        this.geometryUtils = new GeometryUtils();
     }
 
     /**
@@ -37,49 +35,41 @@ export class VisualIndicators {
 
     /**
      * Add visual indicator for a detected clothing image
-     * @param {Object} item - Image item with analysis results
+     * Simple green border, no scores
+     * @param {Object} item - Image item
      * @param {number} index - Image index for identification
      */
     addDetectedImageIndicator(item, index) {
         const img = item.element;
-        const hasStyleAnalysis = item.styleAnalysis;
 
         // Remove existing indicators for this image
         this.removeImageIndicator(img);
 
-        // Determine visual styling based on style score
-        const styling = this.getDetectedImageStyling(hasStyleAnalysis ? item.styleAnalysis.score : null);
-
-        // Create main border overlay
-        const overlay = this.createDetectedOverlay(styling);
+        // Create main border overlay (basic green)
+        const overlay = this.createDetectedOverlay();
         this.positionOverlay(overlay, img);
 
-        // Add style score badge if analysis is available
-        let scoreBadge = null;
-        if (hasStyleAnalysis) {
-            scoreBadge = this.createScoreBadge(item.styleAnalysis, styling.badgeColor);
-            this.positionScoreBadge(scoreBadge, img);
-            document.body.appendChild(scoreBadge);
-        }
+        // Set data attributes
+        img.dataset.aiStyleDetected = 'true';
+        img.dataset.aiStyleIndex = index;
 
-        // Set data attributes and tooltip
-        this.setupImageMetadata(img, item, index, 'detected');
-        this.setupTooltip(img, item, hasStyleAnalysis);
+        // Add tooltip
+        img.title = `Detected clothing item ${index + 1}`;
 
         // Insert overlay into document
         document.body.appendChild(overlay);
 
         // Store references and setup position updates
-        this.trackOverlay(img, overlay, scoreBadge, index);
-        this.setupPositionUpdates(img, overlay, scoreBadge);
+        this.trackOverlay(img, overlay, null, index);
+        this.setupPositionUpdates(img, overlay);
 
         console.log(`✅ Added indicator for detected image ${index + 1}`);
     }
 
     /**
-     * Add visual indicator for a rejected image (debug mode)
+     * Add indicator for rejected images (debug mode only)
      * @param {Object} item - Rejected image item
-     * @param {number} index - Image index for identification
+     * @param {number} index - Image index
      */
     addRejectedImageIndicator(item, index) {
         const img = item.element;
@@ -92,111 +82,47 @@ export class VisualIndicators {
         this.positionOverlay(overlay, img);
 
         // Set data attributes and tooltip
-        this.setupImageMetadata(img, item, index, 'rejected');
-        this.setupRejectedTooltip(img, item);
+        img.dataset.aiStyleDetected = 'false';
+        img.dataset.aiStyleRejected = 'true';
+        img.title = `Rejected: ${item.reason}`;
 
         // Insert overlay into document
         document.body.appendChild(overlay);
 
         // Store references and setup position updates
         this.trackOverlay(img, overlay, null, index);
-        this.setupPositionUpdates(img, overlay, null);
+        this.setupPositionUpdates(img, overlay);
 
         console.log(`🚫 Added indicator for rejected image ${index + 1}`);
     }
 
     /**
-     * Add visual indicator for a single image
-     * @param {Object} item - Image item with analysis results
-     * @param {number} index - Image index for identification
-     */
-    addSingleImageIndicator(item, index) {
-        const img = item.element;
-        const hasStyleAnalysis = item.styleAnalysis;
-
-        // Determine styling
-        const styling = this.getDetectedImageStyling(hasStyleAnalysis ? item.styleAnalysis.score : null);
-
-        // Create overlay
-        const overlay = this.createDetectedOverlay(styling);
-        this.positionOverlay(overlay, img);
-
-        // Setup metadata
-        overlay.dataset.aiStyleOverlay = 'detected';
-        overlay.dataset.aiStyleTargetIndex = index;
-
-        // Add to document and track
-        document.body.appendChild(overlay);
-        this.trackOverlay(img, overlay, null, index);
-        this.setupPositionUpdates(img, overlay, null);
-
-        return overlay;
-    }
-
-    /**
-     * Get styling configuration based on style score
-     * @param {number|null} score - Style analysis score
-     * @returns {Object} Styling configuration
-     * @private
-     */
-    getDetectedImageStyling(score) {
-        let borderColor = '#10b981'; // Default green
-        let borderWidth = '3px';
-        let glowColor = 'rgba(16, 185, 129, 0.6)';
-        let badgeColor = '#10b981';
-
-        if (score !== null) {
-            if (score >= 8) {
-                borderColor = '#059669'; // Darker green for high scores
-                glowColor = 'rgba(5, 150, 105, 0.8)';
-                borderWidth = '4px';
-                badgeColor = '#059669';
-            } else if (score >= 6) {
-                borderColor = '#10b981'; // Standard green
-                glowColor = 'rgba(16, 185, 129, 0.6)';
-                badgeColor = '#10b981';
-            } else if (score >= 4) {
-                borderColor = '#f59e0b'; // Orange for medium scores
-                glowColor = 'rgba(245, 158, 11, 0.6)';
-                badgeColor = '#f59e0b';
-            } else {
-                borderColor = '#ef4444'; // Red for low scores
-                glowColor = 'rgba(239, 68, 68, 0.6)';
-                badgeColor = '#ef4444';
-            }
-        }
-
-        return { borderColor, borderWidth, glowColor, badgeColor };
-    }
-
-    /**
      * Create overlay element for detected images
-     * @param {Object} styling - Styling configuration
+     * Basic green border only
      * @returns {HTMLElement} Overlay element
-     * @private
      */
-    createDetectedOverlay(styling) {
+    createDetectedOverlay() {
         const overlay = document.createElement('div');
         overlay.className = 'ai-style-detected-overlay';
         overlay.style.cssText = `
             position: absolute;
             pointer-events: none;
-            border: ${styling.borderWidth} solid ${styling.borderColor};
-            border-radius: 6px;
-            box-shadow: 0 0 15px ${styling.glowColor};
-            z-index: 10000;
-            top: -3px;
-            left: -3px;
+            border: 3px solid #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+            border-radius: 4px;
+            z-index: 9998;
+            top: 0;
+            left: 0;
             right: -3px;
             bottom: -3px;
         `;
+        overlay.dataset.aiStyleOverlay = 'detected';
         return overlay;
     }
 
     /**
      * Create overlay element for rejected images
      * @returns {HTMLElement} Overlay element
-     * @private
      */
     createRejectedOverlay() {
         const overlay = document.createElement('div');
@@ -206,48 +132,15 @@ export class VisualIndicators {
             pointer-events: none;
             border: 2px solid #ef4444;
             border-radius: 4px;
-            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
-            z-index: 9999;
-            top: -2px;
-            left: -2px;
+            z-index: 9998;
+            opacity: 0.5;
+            top: 0;
+            left: 0;
             right: -2px;
             bottom: -2px;
         `;
+        overlay.dataset.aiStyleOverlay = 'rejected';
         return overlay;
-    }
-
-    /**
-     * Create style score badge
-     * @param {Object} styleAnalysis - Style analysis results
-     * @param {string} badgeColor - Badge background color
-     * @returns {HTMLElement} Badge element
-     * @private
-     */
-    createScoreBadge(styleAnalysis, badgeColor) {
-        const scoreBadge = document.createElement('div');
-        scoreBadge.className = 'ai-style-score-badge';
-        scoreBadge.style.cssText = `
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: ${badgeColor};
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: bold;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 10001;
-            pointer-events: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        `;
-        scoreBadge.textContent = `${styleAnalysis.score}`;
-        scoreBadge.dataset.aiStyleOverlay = 'score-badge';
-        return scoreBadge;
     }
 
     /**
@@ -256,85 +149,20 @@ export class VisualIndicators {
      * @param {HTMLImageElement} img - Target image element
      */
     positionOverlay(overlay, img) {
-        this.geometryUtils.positionOverlay(overlay, img);
-    }
-
-    /**
-     * Position score badge relative to image element
-     * @param {HTMLElement} badge - Badge element
-     * @param {HTMLImageElement} img - Target image element
-     */
-    positionScoreBadge(badge, img) {
-        this.geometryUtils.positionScoreBadge(badge, img);
-    }
-
-    /**
-     * Setup image metadata and data attributes
-     * @param {HTMLImageElement} img - Image element
-     * @param {Object} item - Image analysis item
-     * @param {number} index - Image index
-     * @param {string} type - Type of indicator ('detected' or 'rejected')
-     * @private
-     */
-    setupImageMetadata(img, item, index, type) {
-        if (type === 'detected') {
-            img.dataset.aiStyleDetected = 'true';
-            img.dataset.aiStyleIndex = index;
-        } else if (type === 'rejected') {
-            img.dataset.aiStyleRejected = 'true';
-            img.dataset.aiStyleRejectIndex = index;
-        }
-    }
-
-    /**
-     * Setup tooltip for detected images
-     * @param {HTMLImageElement} img - Image element
-     * @param {Object} item - Image analysis item
-     * @param {boolean} hasStyleAnalysis - Whether style analysis is available
-     * @private
-     */
-    setupTooltip(img, item, hasStyleAnalysis) {
-        let tooltipText = `AI Style Filter: Detected clothing image
-Method: ${item.method}
-Reason: ${item.reasoning}`;
-
-        if (item.quality && item.quality.dimensions) {
-            tooltipText += `
-Size: ${Math.round(item.quality.dimensions.display.width)}x${Math.round(item.quality.dimensions.display.height)}`;
-        }
-
-        if (hasStyleAnalysis) {
-            tooltipText += `
-Style Score: ${item.styleAnalysis.score}/10 (${Math.round(item.styleAnalysis.confidence * 100)}% confidence)
-Analysis: ${item.styleAnalysis.reasoning}`;
-        }
-
-        img.title = tooltipText;
-    }
-
-    /**
-     * Setup tooltip for rejected images
-     * @param {HTMLImageElement} img - Image element
-     * @param {Object} item - Rejected image item
-     * @private
-     */
-    setupRejectedTooltip(img, item) {
-        img.title = `AI Style Filter: Rejected (${item.method})
-Reason: ${item.reason}`;
+        GeometryUtils.positionOverlay(overlay, img);
     }
 
     /**
      * Track overlay elements for cleanup and updates
      * @param {HTMLImageElement} img - Image element
      * @param {HTMLElement} overlay - Main overlay element
-     * @param {HTMLElement|null} scoreBadge - Score badge element (optional)
+     * @param {HTMLElement|null} scoreBadge - Score badge element (unused, kept for compatibility)
      * @param {number} index - Image index
-     * @private
      */
     trackOverlay(img, overlay, scoreBadge, index) {
         const overlayData = {
             overlay,
-            scoreBadge,
+            scoreBadge: null, // No score badges anymore
             index,
             img
         };
@@ -344,39 +172,281 @@ Reason: ${item.reason}`;
         // Set data attributes for cleanup
         overlay.dataset.aiStyleOverlay = 'detected';
         overlay.dataset.aiStyleTargetIndex = index;
-
-        if (scoreBadge) {
-            scoreBadge.dataset.aiStyleTargetIndex = index;
-        }
     }
 
     /**
      * Setup position update event handlers
      * @param {HTMLImageElement} img - Image element
      * @param {HTMLElement} overlay - Main overlay element
-     * @param {HTMLElement|null} scoreBadge - Score badge element (optional)
-     * @private
      */
-    setupPositionUpdates(img, overlay, scoreBadge) {
+    setupPositionUpdates(img, overlay) {
         const updatePosition = () => this.positionOverlay(overlay, img);
-        const updateBadgePosition = scoreBadge ? () => this.positionScoreBadge(scoreBadge, img) : null;
 
         // Store handlers for cleanup
-        const handlers = { updatePosition, updateBadgePosition };
+        const handlers = { updatePosition };
         this.updateHandlers.set(img, handlers);
 
-        // Add event listeners
-        window.addEventListener('scroll', updatePosition);
+        // Add event listeners for position updates
+        window.addEventListener('scroll', updatePosition, { passive: true });
         window.addEventListener('resize', updatePosition);
+    }
 
-        if (updateBadgePosition) {
-            window.addEventListener('scroll', updateBadgePosition);
-            window.addEventListener('resize', updateBadgePosition);
+    /**
+     * Add score overlay to a detected product image
+     * Shows compatibility score (1-10) with color-coded badge
+     * @param {HTMLImageElement} img - Image element
+     * @param {number} score - Compatibility score (1-10)
+     * @param {string} reasoning - Analysis reasoning
+     * @param {number} index - Image index
+     */
+    addScoreOverlay(img, score, reasoning, index) {
+        console.log(`🏷️ addScoreOverlay called for image ${index + 1}:`, {
+            score,
+            reasoning,
+            imgAlt: img.alt,
+            imgSrc: img.src.substring(0, 60) + '...'
+        });
+
+        // Get existing overlay data
+        const overlayData = this.overlayMap.get(img);
+        console.log('   Overlay data:', overlayData ? 'FOUND' : 'NOT FOUND');
+
+        if (!overlayData) {
+            console.warn('⚠️ No overlay found for image, cannot add score');
+            console.log('   Overlay map size:', this.overlayMap.size);
+            console.log('   Image in map?', this.overlayMap.has(img));
+            return;
+        }
+
+        // Remove existing score badge if any
+        if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
+            console.log('   Removing existing score badge');
+            overlayData.scoreBadge.remove();
+        }
+
+        // Create score badge
+        console.log('   Creating score badge...');
+        const scoreBadge = this.createScoreBadge(score, reasoning);
+        console.log('   Score badge created:', scoreBadge);
+
+        console.log('   Positioning score badge...');
+        this.positionScoreBadge(scoreBadge, img);
+        console.log('   Badge position:', {
+            top: scoreBadge.style.top,
+            left: scoreBadge.style.left
+        });
+
+        // Insert score badge into document
+        console.log('   Appending badge to document.body');
+        document.body.appendChild(scoreBadge);
+        console.log('   Badge appended, parent:', scoreBadge.parentNode);
+
+        // Update tracking
+        overlayData.scoreBadge = scoreBadge;
+        overlayData.score = score;
+        overlayData.reasoning = reasoning;
+
+        // Update image attributes
+        img.dataset.aiStyleScore = score;
+        img.title = `Score: ${score}/10 - ${reasoning}`;
+        console.log('   Image data attributes updated');
+
+        // Add scroll/resize handlers for score badge
+        const updateScoreBadgePosition = () => this.positionScoreBadge(scoreBadge, img);
+        const handlers = this.updateHandlers.get(img);
+        if (handlers) {
+            handlers.updateScoreBadgePosition = updateScoreBadgePosition;
+            window.addEventListener('scroll', updateScoreBadgePosition, { passive: true });
+            window.addEventListener('resize', updateScoreBadgePosition);
+            console.log('   Event handlers added');
+        } else {
+            console.warn('   ⚠️ No handlers found for image');
+        }
+
+        console.log(`✅ Added score overlay ${score}/10 for image ${index + 1}`);
+    }
+
+    /**
+     * Create score badge element
+     * @param {number} score - Compatibility score (1-10)
+     * @param {string} reasoning - Analysis reasoning
+     * @returns {HTMLElement} Score badge element
+     */
+    createScoreBadge(score, reasoning) {
+        const badge = document.createElement('div');
+        badge.className = 'ai-style-score-badge';
+
+        // Determine color based on score
+        let backgroundColor, textColor;
+        if (score >= 8) {
+            // Excellent match: green
+            backgroundColor = '#10b981';
+            textColor = '#ffffff';
+        } else if (score >= 6) {
+            // Good match: blue
+            backgroundColor = '#3b82f6';
+            textColor = '#ffffff';
+        } else if (score >= 4) {
+            // Neutral: yellow
+            backgroundColor = '#f59e0b';
+            textColor = '#000000';
+        } else {
+            // Poor match: red
+            backgroundColor = '#ef4444';
+            textColor = '#ffffff';
+        }
+
+        badge.style.cssText = `
+            position: absolute;
+            background-color: ${backgroundColor};
+            color: ${textColor};
+            font-weight: bold;
+            font-size: 18px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 9999;
+            pointer-events: auto;
+            cursor: help;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-width: 40px;
+            text-align: center;
+        `;
+
+        badge.textContent = `${score}`;
+        badge.title = reasoning;
+        badge.dataset.aiStyleScoreBadge = 'true';
+
+        return badge;
+    }
+
+    /**
+     * Position score badge at top-right of image
+     * @param {HTMLElement} badge - Score badge element
+     * @param {HTMLImageElement} img - Target image element
+     */
+    positionScoreBadge(badge, img) {
+        const rect = img.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+        badge.style.top = `${rect.top + scrollTop + 8}px`;
+        badge.style.left = `${rect.right + scrollLeft - 60}px`; // 60px from right edge
+    }
+
+    /**
+     * Add loading indicator to a detected product image while analysis is in progress
+     * @param {HTMLImageElement} img - Image element
+     * @param {number} index - Image index
+     */
+    addLoadingIndicator(img, index) {
+        console.log(`⏳ Adding loading indicator for image ${index + 1}`);
+
+        // Get existing overlay data
+        const overlayData = this.overlayMap.get(img);
+        if (!overlayData) {
+            console.warn('⚠️ No overlay found for image, cannot add loading indicator');
+            return;
+        }
+
+        // Remove existing loading indicator or score badge if any
+        if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
+            overlayData.scoreBadge.remove();
+        }
+
+        // Create loading badge
+        const loadingBadge = this.createLoadingBadge();
+        this.positionScoreBadge(loadingBadge, img);
+
+        // Insert loading badge into document
+        document.body.appendChild(loadingBadge);
+
+        // Update tracking
+        overlayData.scoreBadge = loadingBadge;
+        overlayData.isLoading = true;
+
+        // Add scroll/resize handlers for loading badge
+        const updateLoadingBadgePosition = () => this.positionScoreBadge(loadingBadge, img);
+        const handlers = this.updateHandlers.get(img);
+        if (handlers) {
+            handlers.updateScoreBadgePosition = updateLoadingBadgePosition;
+            window.addEventListener('scroll', updateLoadingBadgePosition, { passive: true });
+            window.addEventListener('resize', updateLoadingBadgePosition);
+        }
+
+        console.log(`✅ Added loading indicator for image ${index + 1}`);
+    }
+
+    /**
+     * Create loading badge element with spinner
+     * @returns {HTMLElement} Loading badge element
+     */
+    createLoadingBadge() {
+        const badge = document.createElement('div');
+        badge.className = 'ai-style-score-badge';
+        badge.dataset.aiStyleScoreBadge = 'loading';
+
+        badge.style.cssText = `
+            position: absolute;
+            z-index: 999999;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            pointer-events: none;
+            user-select: none;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.3);
+            width: 52px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        // Add spinner
+        const spinner = document.createElement('div');
+        spinner.style.cssText = `
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        `;
+
+        badge.appendChild(spinner);
+
+        // Ensure spinner animation exists
+        this.ensureSpinnerAnimation();
+
+        return badge;
+    }
+
+    /**
+     * Ensure spinner animation CSS is added to document
+     * @private
+     */
+    ensureSpinnerAnimation() {
+        if (!document.querySelector('#ai-style-spinner-animation')) {
+            const style = document.createElement('style');
+            style.id = 'ai-style-spinner-animation';
+            style.textContent = `
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
         }
     }
 
     /**
-     * Remove visual indicator for specific image
+     * Remove visual indicator from an image
      * @param {HTMLImageElement} img - Image element
      */
     removeImageIndicator(img) {
@@ -386,6 +456,8 @@ Reason: ${item.reason}`;
             if (overlayData.overlay && overlayData.overlay.parentNode) {
                 overlayData.overlay.remove();
             }
+
+            // Remove score badge if exists
             if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
                 overlayData.scoreBadge.remove();
             }
@@ -393,11 +465,13 @@ Reason: ${item.reason}`;
             // Remove event handlers
             const handlers = this.updateHandlers.get(img);
             if (handlers) {
-                window.removeEventListener('scroll', handlers.updatePosition);
-                window.removeEventListener('resize', handlers.updatePosition);
-                if (handlers.updateBadgePosition) {
-                    window.removeEventListener('scroll', handlers.updateBadgePosition);
-                    window.removeEventListener('resize', handlers.updateBadgePosition);
+                if (handlers.updatePosition) {
+                    window.removeEventListener('scroll', handlers.updatePosition);
+                    window.removeEventListener('resize', handlers.updatePosition);
+                }
+                if (handlers.updateScoreBadgePosition) {
+                    window.removeEventListener('scroll', handlers.updateScoreBadgePosition);
+                    window.removeEventListener('resize', handlers.updateScoreBadgePosition);
                 }
                 this.updateHandlers.delete(img);
             }
@@ -408,17 +482,12 @@ Reason: ${item.reason}`;
             // Clean up image data attributes
             delete img.dataset.aiStyleDetected;
             delete img.dataset.aiStyleIndex;
-            delete img.dataset.aiStyleRejected;
-            delete img.dataset.aiStyleRejectIndex;
-
-            if (img.title && img.title.includes('AI Style Filter')) {
-                img.title = '';
-            }
+            delete img.dataset.aiStyleScore;
         }
     }
 
     /**
-     * Clear all product detection indicators
+     * Clear all product detection visual indicators
      */
     clearProductDetection() {
         console.log('🧹 Clearing all visual indicators...');
@@ -427,33 +496,29 @@ Reason: ${item.reason}`;
         const overlays = document.querySelectorAll('[data-ai-style-overlay]');
         overlays.forEach(overlay => overlay.remove());
 
+        // Remove all score badges
+        const scoreBadges = document.querySelectorAll('[data-ai-style-score-badge]');
+        scoreBadges.forEach(badge => badge.remove());
+
         // Clear all event handlers
         this.updateHandlers.forEach((handlers, img) => {
-            window.removeEventListener('scroll', handlers.updatePosition);
-            window.removeEventListener('resize', handlers.updatePosition);
-            if (handlers.updateBadgePosition) {
-                window.removeEventListener('scroll', handlers.updateBadgePosition);
-                window.removeEventListener('resize', handlers.updateBadgePosition);
+            if (handlers.updatePosition) {
+                window.removeEventListener('scroll', handlers.updatePosition);
+                window.removeEventListener('resize', handlers.updatePosition);
+            }
+            if (handlers.updateScoreBadgePosition) {
+                window.removeEventListener('scroll', handlers.updateScoreBadgePosition);
+                window.removeEventListener('resize', handlers.updateScoreBadgePosition);
             }
         });
 
-        // Clear image data attributes and titles
-        const detectedImages = document.querySelectorAll('[data-ai-style-detected]');
-        detectedImages.forEach(img => {
+        // Clear image data attributes
+        const markedImages = document.querySelectorAll('[data-ai-style-detected]');
+        markedImages.forEach(img => {
             delete img.dataset.aiStyleDetected;
             delete img.dataset.aiStyleIndex;
-            if (img.title && img.title.includes('AI Style Filter')) {
-                img.title = '';
-            }
-        });
-
-        const rejectedImages = document.querySelectorAll('[data-ai-style-rejected]');
-        rejectedImages.forEach(img => {
             delete img.dataset.aiStyleRejected;
-            delete img.dataset.aiStyleRejectIndex;
-            if (img.title && img.title.includes('AI Style Filter')) {
-                img.title = '';
-            }
+            delete img.dataset.aiStyleScore;
         });
 
         // Clear internal tracking
@@ -469,46 +534,37 @@ Reason: ${item.reason}`;
     updateAllPositions() {
         this.overlayMap.forEach((overlayData, img) => {
             this.positionOverlay(overlayData.overlay, img);
-            if (overlayData.scoreBadge) {
-                this.positionScoreBadge(overlayData.scoreBadge, img);
-            }
         });
     }
 
     /**
-     * Enable or disable debug mode
-     * @param {boolean} enabled - Whether to enable debug mode
+     * Set debug mode
+     * @param {boolean} enabled - Enable or disable debug mode
      */
     setDebugMode(enabled) {
         this.debugMode = enabled;
-        console.log(`🐛 Visual indicators debug mode ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     /**
-     * Get statistics about current indicators
+     * Get indicator statistics
      * @returns {Object} Statistics object
      */
     getIndicatorStats() {
         const overlays = document.querySelectorAll('[data-ai-style-overlay]');
         const detectedImages = document.querySelectorAll('[data-ai-style-detected="true"]');
         const rejectedImages = document.querySelectorAll('[data-ai-style-rejected="true"]');
-        const scoreBadges = document.querySelectorAll('[data-ai-style-overlay="score-badge"]');
 
         return {
             totalOverlays: overlays.length,
             detectedImages: detectedImages.length,
             rejectedImages: rejectedImages.length,
-            scoreBadges: scoreBadges.length,
             trackedOverlays: this.overlayMap.size,
             activeHandlers: this.updateHandlers.size
         };
     }
+}
 
-    /**
-     * Cleanup all resources
-     */
-    cleanup() {
-        this.clearProductDetection();
-        console.log('🧹 Visual indicators cleanup complete');
-    }
+// Also expose on window for backward compatibility
+if (typeof window !== 'undefined') {
+    window.VisualIndicators = VisualIndicators;
 }

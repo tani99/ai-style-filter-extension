@@ -95,89 +95,18 @@ export class CandidateFinder {
     }
 
     /**
-     * Find candidate images using multiple strategies
+     * Find candidate images - using universal detection only
      * @returns {HTMLImageElement[]} Array of candidate image elements
      */
     findCandidateImages() {
-        const candidates = new Set();
-        let selectorStats = {
-            siteSpecific: 0,
-            productCards: 0,
-            general: 0,
-            universal: 0
-        };
+        console.log(`🔍 Looking for images...`);
 
-        if (!this.currentSite) {
-            console.log('⚠️ No current site configuration - using universal fallback only');
-            return this._universalFallback();
-        }
+        // Use universal fallback only - gets all images with quick exclusion
+        const candidates = this._universalFallback();
 
-        console.log(`🔍 Looking for images on ${this.currentSite.name}...`);
+        console.log(`  🎯 Total candidates found: ${candidates.length}`);
 
-        // Strategy 1: Use site-specific product image selectors
-        console.log('  📋 Testing site-specific selectors:');
-        if (this.currentSite.selectors?.productImages) {
-            for (const selector of this.currentSite.selectors.productImages) {
-                try {
-                    const images = document.querySelectorAll(selector);
-                    if (images.length > 0) {
-                        console.log(`    ✅ ${selector}: ${images.length} images`);
-                        images.forEach(img => candidates.add(img));
-                        selectorStats.siteSpecific += images.length;
-                    } else {
-                        console.log(`    ❌ ${selector}: 0 images`);
-                    }
-                } catch (e) {
-                    console.log(`    ⚠️ ${selector}: invalid selector`);
-                }
-            }
-        }
-
-        // Strategy 2: Find images within product cards
-        console.log('  🎴 Testing product card selectors:');
-        if (this.currentSite.selectors?.productCards) {
-            for (const selector of this.currentSite.selectors.productCards) {
-                try {
-                    const cards = document.querySelectorAll(selector);
-                    console.log(`    📦 ${selector}: ${cards.length} cards found`);
-                    cards.forEach(card => {
-                        const images = card.querySelectorAll('img');
-                        images.forEach(img => candidates.add(img));
-                        selectorStats.productCards += images.length;
-                    });
-                } catch (e) {
-                    console.log(`    ⚠️ ${selector}: invalid selector`);
-                }
-            }
-        }
-
-        // Strategy 3: General product image detection
-        console.log('  🔄 Testing general selectors:');
-        for (const selector of this.generalSelectors) {
-            try {
-                const images = document.querySelectorAll(selector);
-                if (images.length > 0) {
-                    console.log(`    ✅ ${selector}: ${images.length} images`);
-                    images.forEach(img => candidates.add(img));
-                    selectorStats.general += images.length;
-                }
-            } catch (e) {
-                // Skip invalid selectors
-            }
-        }
-
-        // Strategy 4: Universal fallback if we found very few candidates
-        if (candidates.size < 5) {
-            console.log('  🌐 Universal fallback (found < 5 candidates):');
-            const universalCandidates = this._universalFallback();
-            universalCandidates.forEach(img => candidates.add(img));
-            selectorStats.universal = universalCandidates.length;
-        }
-
-        console.log('  📊 Selector Statistics:', selectorStats);
-        console.log(`  🎯 Total unique candidates: ${candidates.size}`);
-
-        return Array.from(candidates);
+        return candidates;
     }
 
     /**

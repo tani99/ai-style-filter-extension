@@ -1,7 +1,7 @@
 /**
  * DOMUtils provides utility functions for DOM manipulation and element analysis
  */
-window.DOMUtils = class DOMUtils {
+export class DOMUtils {
     /**
      * Generate a unique key for an image element based on src, alt, and className
      * @param {HTMLImageElement} img - The image element
@@ -96,4 +96,9 @@ window.DOMUtils = class DOMUtils {
             id: img.id || '(no id)'
         };
     }
+}
+
+// Also expose on window for backward compatibility
+if (typeof window !== 'undefined') {
+    window.DOMUtils = DOMUtils;
 }

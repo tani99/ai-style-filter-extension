@@ -1,5 +1,5 @@
 // Site-specific configuration for e-commerce site detection and selectors
-window.SUPPORTED_SITES = {
+export const SUPPORTED_SITES = {
     'zara.com': {
         name: 'Zara',
         productPagePatterns: ['/product/', '/p/', '/item/'],
@@ -79,3 +79,7 @@ window.SUPPORTED_SITES = {
         }
     }
 };
+// Also expose on window for backward compatibility
+if (typeof window !== 'undefined') {
+    window.SUPPORTED_SITES = SUPPORTED_SITES;
+}

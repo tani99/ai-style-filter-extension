@@ -8,6 +8,7 @@ import { CandidateFinder } from '../detection/CandidateFinder.js';
 
 // AI modules
 import { AIAnalysisEngine } from '../ai/AIAnalysisEngine.js';
+import { ProductAnalyzer } from '../ai/ProductAnalyzer.js';
 
 // UI modules
 import { LoadingAnimations } from '../ui/LoadingAnimations.js';
@@ -40,6 +41,7 @@ export class ContentScriptManager {
         this.candidateFinder = new CandidateFinder(this.currentSite);
         this.imageDetector = new ImageDetector(this.currentSite, this.isClothingImageCallback.bind(this));
         this.aiAnalysisEngine = new AIAnalysisEngine();
+        this.productAnalyzer = new ProductAnalyzer();
 
         // UI components
         this.loadingAnimations = new LoadingAnimations();
@@ -54,6 +56,8 @@ export class ContentScriptManager {
         this.processedImages = new Set();
         this.lastDetectionResults = null;
         this.isInitialized = false;
+        this.styleProfile = null; // User's style profile loaded from storage
+        this.productAnalysisResults = new Map(); // Map of image -> analysis result
 
         // Performance settings
         this.maxConcurrentAnalyses = 6;
@@ -72,6 +76,9 @@ export class ContentScriptManager {
 
         console.log(`✅ AI Style Filter initializing on ${this.currentSite?.name || 'Unknown site'}`);
         console.log(`📄 Page Type: ${this.pageType}`);
+
+        // Load user's style profile
+        await this.loadStyleProfile();
 
         // Initialize based on page type
         this.initializeForPageType();
@@ -341,6 +348,19 @@ export class ContentScriptManager {
                 this.loadingAnimations.showSuccessMessage(
                     `Found ${results.detectedImages.length} clothing items`
                 );
+
+                // Analyze products against style profile immediately
+                if (this.styleProfile) {
+                    // Add loading indicators to all detected products
+                    results.detectedImages.forEach((item, index) => {
+                        this.visualIndicators.addLoadingIndicator(item.element, index);
+                    });
+
+                    // Start analyzing all products immediately (in parallel)
+                    this.analyzeDetectedProductsInParallel();
+                } else {
+                    console.log('ℹ️ No style profile available - skipping product analysis');
+                }
             }
 
             return results;
@@ -381,6 +401,262 @@ export class ContentScriptManager {
     }
 
     /**
+     * Load user's style profile from storage
+     * @returns {Promise<void>}
+     */
+    async loadStyleProfile() {
+        try {
+            const result = await chrome.storage.local.get(['styleProfile']);
+            if (result.styleProfile) {
+                this.styleProfile = result.styleProfile;
+                console.log('✅ Style profile loaded:', {
+                    version: this.styleProfile.version,
+                    generatedAt: new Date(this.styleProfile.generated_at).toLocaleString(),
+                    categories: this.styleProfile.style_categories?.map(c => c.name).join(', ')
+                });
+            } else {
+                console.log('ℹ️ No style profile found in storage');
+            }
+        } catch (error) {
+            console.error('❌ Failed to load style profile:', error);
+        }
+    }
+
+    /**
+     * Analyze all detected products against user's style profile
+     * Implements Step 5.1: Real-time Product Analysis
+     * @returns {Promise<void>}
+     */
+    async analyzeDetectedProducts() {
+        console.log('🎯 analyzeDetectedProducts called');
+        console.log('   Style profile:', this.styleProfile ? 'PRESENT' : 'MISSING');
+        console.log('   Detected products:', this.detectedProducts.length);
+
+        if (!this.styleProfile) {
+            console.warn('⚠️ No style profile available for analysis');
+            console.log('   You need to upload photos and generate a style profile first');
+            return;
+        }
+
+        if (this.detectedProducts.length === 0) {
+            console.log('ℹ️ No detected products to analyze');
+            return;
+        }
+
+        console.log(`🔍 Starting product analysis for ${this.detectedProducts.length} items...`);
+        console.log('   Style profile details:', {
+            colors: this.styleProfile.color_palette?.best_colors,
+            styles: this.styleProfile.style_categories?.map(c => c.name),
+            version: this.styleProfile.version
+        });
+
+        // Show analysis loading message
+        this.loadingAnimations.showLoadingAnimation('Analyzing products against your style...');
+
+        try {
+            // Extract image elements from detected products
+            const productImages = this.detectedProducts.map(product => product.element);
+            console.log('📦 Product images to analyze:', productImages.length);
+
+            // Analyze products in batches
+            console.log('🚀 Starting batch analysis...');
+            const analysisResults = await this.productAnalyzer.analyzeBatch(
+                productImages,
+                this.styleProfile,
+                {
+                    batchSize: 3,
+                    delayBetweenBatches: 500,
+                    onProgress: (progress) => {
+                        console.log(`📊 Analysis progress: ${progress.completed}/${progress.total} (${progress.percentage}%)`);
+                        this.loadingAnimations.updateLoadingMessage(
+                            `Analyzing products: ${progress.completed}/${progress.total}`
+                        );
+                    }
+                }
+            );
+
+            console.log('✅ Batch analysis complete, results:', analysisResults);
+
+            // Store analysis results
+            productImages.forEach((img, index) => {
+                const result = analysisResults[index];
+                this.productAnalysisResults.set(img, result);
+
+                // Log detailed score information with source
+                const isFromAI = result.method === 'ai_analysis';
+                const isDefault = result.method === 'fallback' || result.method === 'error_fallback';
+                const scoreSource = isFromAI ? '🤖 AI' : (isDefault ? '⚠️ DEFAULT' : '❓ ' + result.method);
+
+                console.log(`   📊 Product ${index + 1}:`, {
+                    score: result.score,
+                    source: scoreSource,
+                    reasoning: result.reasoning,
+                    method: result.method,
+                    cached: result.cached || false,
+                    success: result.success,
+                    productAlt: img.alt || 'no alt text'
+                });
+
+                if (isDefault) {
+                    console.warn(`   ⚠️ Product ${index + 1} using DEFAULT score - AI analysis failed or unavailable`);
+                }
+            });
+
+            // Update visual indicators with scores
+            console.log('🎨 Updating visual indicators with scores...');
+            this.updateProductScores(analysisResults);
+
+            // Hide loading animation
+            this.loadingAnimations.hideLoadingAnimation();
+
+            // Show completion message
+            const avgScore = this.calculateAverageScore(analysisResults);
+            this.loadingAnimations.showSuccessMessage(
+                `Analysis complete! Average compatibility: ${avgScore.toFixed(1)}/10`
+            );
+
+            // Count score sources
+            const aiScores = analysisResults.filter(r => r.method === 'ai_analysis').length;
+            const defaultScores = analysisResults.filter(r => r.method === 'fallback' || r.method === 'error_fallback').length;
+            const cachedScores = analysisResults.filter(r => r.cached).length;
+
+            console.log('✅ Product analysis complete:', {
+                totalProducts: analysisResults.length,
+                averageScore: avgScore.toFixed(1),
+                scoreBreakdown: {
+                    fromAI: aiScores,
+                    fromDefault: defaultScores,
+                    fromCache: cachedScores
+                },
+                cacheStats: this.productAnalyzer.getCacheStats()
+            });
+
+            if (defaultScores > 0) {
+                console.warn(`⚠️ WARNING: ${defaultScores} products received DEFAULT scores instead of AI analysis!`);
+                console.log('   This usually means AI analysis failed. Check logs above for errors.');
+            }
+
+        } catch (error) {
+            console.error('❌ Product analysis failed:', error);
+            console.error('   Error message:', error.message);
+            console.error('   Error stack:', error.stack);
+            this.loadingAnimations.hideLoadingAnimation();
+            this.loadingAnimations.showErrorMessage('Analysis failed');
+        }
+    }
+
+    /**
+     * Update visual indicators with product scores
+     * @param {Array<Object>} analysisResults - Analysis results
+     * @private
+     */
+    updateProductScores(analysisResults) {
+        console.log('🎨 updateProductScores called with', analysisResults.length, 'results');
+
+        analysisResults.forEach((result, index) => {
+            const product = this.detectedProducts[index];
+            console.log(`   Product ${index + 1}:`, {
+                hasProduct: !!product,
+                hasElement: !!product?.element,
+                score: result.score,
+                reasoning: result.reasoning
+            });
+
+            if (product && product.element) {
+                console.log(`   Adding score overlay for product ${index + 1}`);
+                // Add score overlay to product
+                this.visualIndicators.addScoreOverlay(
+                    product.element,
+                    result.score,
+                    result.reasoning,
+                    index
+                );
+            } else {
+                console.warn(`   ⚠️ Cannot add score overlay - missing product or element at index ${index}`);
+            }
+        });
+
+        console.log('✅ Visual indicators updated with scores');
+    }
+
+    /**
+     * Analyze all detected products in parallel - show scores as they complete
+     * Much faster than batch analysis - starts all analyses immediately
+     * @returns {Promise<void>}
+     */
+    async analyzeDetectedProductsInParallel() {
+        console.log('🚀 analyzeDetectedProductsInParallel called');
+        console.log('   Detected products:', this.detectedProducts.length);
+
+        if (!this.styleProfile || this.detectedProducts.length === 0) {
+            return;
+        }
+
+        const productImages = this.detectedProducts.map(product => product.element);
+        console.log(`⚡ Starting parallel analysis of ${productImages.length} products...`);
+
+        // Start all analyses immediately (don't await)
+        productImages.forEach(async (img, index) => {
+            try {
+                // Analyze this product
+                const result = await this.productAnalyzer.analyzeProduct(img, this.styleProfile);
+
+                // Store result
+                this.productAnalysisResults.set(img, result);
+
+                // Update visual indicator immediately (replace loading with score)
+                const product = this.detectedProducts[index];
+                if (product && product.element) {
+                    this.visualIndicators.addScoreOverlay(
+                        product.element,
+                        result.score,
+                        result.reasoning,
+                        index
+                    );
+
+                    console.log(`✅ Product ${index + 1}/${productImages.length} scored: ${result.score}/10`);
+                }
+            } catch (error) {
+                console.error(`❌ Failed to analyze product ${index + 1}:`, error);
+            }
+        });
+
+        console.log('⚡ All product analyses started in parallel');
+    }
+
+    /**
+     * Calculate average score from analysis results
+     * @param {Array<Object>} analysisResults - Analysis results
+     * @returns {number} Average score
+     * @private
+     */
+    calculateAverageScore(analysisResults) {
+        if (analysisResults.length === 0) return 0;
+
+        const totalScore = analysisResults.reduce((sum, result) => sum + result.score, 0);
+        return totalScore / analysisResults.length;
+    }
+
+
+    /**
+     * Get analysis result for a specific product image
+     * @param {HTMLImageElement} img - Product image element
+     * @returns {Object|null} Analysis result or null
+     */
+    getProductAnalysis(img) {
+        return this.productAnalysisResults.get(img) || null;
+    }
+
+    /**
+     * Clear all product analysis data
+     */
+    clearProductAnalysis() {
+        this.productAnalysisResults.clear();
+        this.productAnalyzer.clearCache();
+        console.log('🧹 Product analysis data cleared');
+    }
+
+    /**
      * Test site-specific selectors
      */
     testSelectors() {
@@ -399,6 +675,7 @@ export class ContentScriptManager {
         this.detectedProducts = [];
         this.processedImages.clear();
         this.lastDetectionResults = null;
+        this.clearProductAnalysis(); // Also clear analysis data
         console.log('🧹 Product detection cleared');
     }
 

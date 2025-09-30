@@ -1,7 +1,7 @@
 /**
  * GeometryUtils provides utility functions for positioning and layout calculations
  */
-window.GeometryUtils = class GeometryUtils {
+export class GeometryUtils {
     /**
      * Position an overlay element to exactly cover an image element
      * @param {HTMLElement} overlay - The overlay element to position
@@ -92,4 +92,9 @@ window.GeometryUtils = class GeometryUtils {
             right: rect.right + scroll.scrollLeft
         };
     }
+}
+
+// Also expose on window for backward compatibility
+if (typeof window !== 'undefined') {
+    window.GeometryUtils = GeometryUtils;
 }
