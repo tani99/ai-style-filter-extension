@@ -39,7 +39,9 @@ export class VisibilityChecker {
         }
 
         // Check natural dimensions if available
-        if (naturalWidth > 0 && naturalHeight > 0) {
+        // Skip natural size check for 1x1 images (lazy-loading placeholders)
+        // These will be re-checked when the actual image loads
+        if (naturalWidth > 1 && naturalHeight > 1) {
             if (naturalWidth < minNaturalSize || naturalHeight < minNaturalSize) {
                 return {
                     isValid: false,
@@ -97,142 +99,12 @@ export class VisibilityChecker {
             return { isVisible: false, reason: 'opacity: 0' };
         }
 
-        // Check if image is outside the viewport
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-
-        if (rect.right <= 0 || rect.left >= viewportWidth ||
-            rect.bottom <= 0 || rect.top >= viewportHeight) {
-
-            // Add detailed debugging for viewport rejection
-            const debugInfo = {
-                imageRect: {
-                    left: rect.left,
-                    right: rect.right,
-                    top: rect.top,
-                    bottom: rect.bottom,
-                    width: rect.width,
-                    height: rect.height
-                },
-                viewport: {
-                    width: viewportWidth,
-                    height: viewportHeight
-                },
-                checks: {
-                    rightLeqZero: rect.right <= 0,
-                    leftGeqViewportWidth: rect.left >= viewportWidth,
-                    bottomLeqZero: rect.bottom <= 0,
-                    topGeqViewportHeight: rect.top >= viewportHeight
-                }
-            };
-
-            console.log('🐛 VIEWPORT DEBUG - Image rejected as outside viewport:', debugInfo);
-            console.log('🐛 Image src:', img.src);
-            console.log('🐛 Image alt:', img.alt);
-
-            return {
-                isVisible: false,
-                reason: 'outside viewport',
-                debugInfo: debugInfo
-            };
-        }
-
-        // Check if image is clipped by parent containers (common in carousels)
-        let parent = img.parentElement;
-        let depth = 0;
-
-        while (parent && depth < 5) {
-            const parentRect = parent.getBoundingClientRect();
-            const parentStyle = window.getComputedStyle(parent);
-
-            // Check if parent has overflow hidden and image is outside its bounds
-            if (parentStyle.overflow === 'hidden' || parentStyle.overflowX === 'hidden') {
-                // Check if image is clipped horizontally (common in image carousels)
-                if (rect.left >= parentRect.right || rect.right <= parentRect.left) {
-                    return { isVisible: false, reason: 'clipped by parent container' };
-                }
-
-                // For carousel detection, check if image is significantly outside parent bounds
-                const imageCenter = rect.left + rect.width / 2;
-                const parentCenter = parentRect.left + parentRect.width / 2;
-                const maxDistance = parentRect.width * 0.6; // Allow some tolerance
-
-                if (Math.abs(imageCenter - parentCenter) > maxDistance) {
-                    return { isVisible: false, reason: 'carousel image not active' };
-                }
-            }
-
-            if (parentStyle.overflow === 'hidden' || parentStyle.overflowY === 'hidden') {
-                // Check if image is clipped vertically
-                if (rect.top >= parentRect.bottom || rect.bottom <= parentRect.top) {
-                    return { isVisible: false, reason: 'clipped by parent container' };
-                }
-            }
-
-            parent = parent.parentElement;
-            depth++;
-        }
-
-        // Check intersection with viewport (more precise than basic bounds check)
-        const viewportIntersection = {
-            left: Math.max(rect.left, 0),
-            top: Math.max(rect.top, 0),
-            right: Math.min(rect.right, viewportWidth),
-            bottom: Math.min(rect.bottom, viewportHeight)
-        };
-
-        const intersectionWidth = Math.max(0, viewportIntersection.right - viewportIntersection.left);
-        const intersectionHeight = Math.max(0, viewportIntersection.bottom - viewportIntersection.top);
-        const intersectionArea = intersectionWidth * intersectionHeight;
-        const imageArea = rect.width * rect.height;
-
-        // Require at least 25% of the image to be visible (lowered from 50% for sites like H&M)
-        const visibilityRatio = imageArea > 0 ? intersectionArea / imageArea : 0;
-        if (visibilityRatio < 0.25) {
-            // Add detailed debugging for visibility rejection
-            const debugInfo = {
-                imageRect: {
-                    left: Math.round(rect.left),
-                    right: Math.round(rect.right),
-                    top: Math.round(rect.top),
-                    bottom: Math.round(rect.bottom),
-                    width: Math.round(rect.width),
-                    height: Math.round(rect.height)
-                },
-                viewport: {
-                    width: viewportWidth,
-                    height: viewportHeight
-                },
-                intersection: {
-                    left: Math.round(viewportIntersection.left),
-                    right: Math.round(viewportIntersection.right),
-                    top: Math.round(viewportIntersection.top),
-                    bottom: Math.round(viewportIntersection.bottom),
-                    width: Math.round(intersectionWidth),
-                    height: Math.round(intersectionHeight)
-                },
-                areas: {
-                    imageArea: Math.round(imageArea),
-                    intersectionArea: Math.round(intersectionArea),
-                    visibilityRatio: Math.round(visibilityRatio * 100) / 100
-                }
-            };
-
-            console.log('🐛 VISIBILITY DEBUG - Image rejected for low visibility:', debugInfo);
-            console.log('🐛 Image src:', img.src);
-            console.log('🐛 Image alt:', img.alt);
-
-            return {
-                isVisible: false,
-                reason: `only ${Math.round(visibilityRatio * 100)}% visible (need 25%+)`,
-                debugInfo: debugInfo
-            };
-        }
+        // Note: Viewport filtering removed - all images on page are now detected
+        // regardless of scroll position or viewport visibility
 
         return {
             isVisible: true,
-            reason: `${Math.round(visibilityRatio * 100)}% visible`,
-            visibilityRatio: visibilityRatio
+            reason: 'passed basic visibility checks'
         };
     }
 

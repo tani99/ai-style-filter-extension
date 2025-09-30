@@ -24,15 +24,17 @@ import { DOMUtils } from '../utils/DOMUtils.js';
  */
 export class ContentScriptManager {
     constructor() {
-        // Initialize core components
-        this.siteDetector = new SiteDetector();
-        this.pageTypeDetector = new PageTypeDetector();
+        // Get current page info
+        this.currentUrl = window.location.href;
+        this.currentHost = window.location.hostname;
+
+        // Initialize core components with proper parameters
+        this.siteDetector = new SiteDetector(this.currentHost);
+        this.pageTypeDetector = new PageTypeDetector(this.currentUrl, this.currentHost);
 
         // Detect current site and page type
         this.currentSite = this.siteDetector.detectCurrentSite();
-        this.currentUrl = window.location.href;
-        this.currentHost = window.location.hostname;
-        this.pageType = this.pageTypeDetector.detectPageType(this.currentSite);
+        this.pageType = this.pageTypeDetector.detectPageType();
 
         // Initialize other components
         this.candidateFinder = new CandidateFinder(this.currentSite);
@@ -45,7 +47,7 @@ export class ContentScriptManager {
         this.debugInterface = new DebugInterface();
 
         // Event management
-        this.eventListeners = new EventListeners(this.currentSite);
+        this.eventListeners = new EventListeners(this);
 
         // State tracking
         this.detectedProducts = [];
@@ -55,7 +57,7 @@ export class ContentScriptManager {
 
         // Performance settings
         this.maxConcurrentAnalyses = 6;
-        this.viewportAnalysisEnabled = true;
+        this.viewportAnalysisEnabled = false; // Disabled - detect all images at once
         this.analysisObserver = null;
     }
 
@@ -71,9 +73,6 @@ export class ContentScriptManager {
         console.log(`✅ AI Style Filter initializing on ${this.currentSite?.name || 'Unknown site'}`);
         console.log(`📄 Page Type: ${this.pageType}`);
 
-        // Initialize AI analysis engine
-        await this.initializeStyleAnalysis();
-
         // Initialize based on page type
         this.initializeForPageType();
 
@@ -88,44 +87,6 @@ export class ContentScriptManager {
 
         this.isInitialized = true;
         console.log('🎉 ContentScriptManager initialization complete');
-    }
-
-    /**
-     * Initialize style analysis system
-     * @private
-     */
-    async initializeStyleAnalysis() {
-        console.log('🎨 Initializing style analysis system...');
-
-        // Load user's style profile from storage
-        await this.loadUserStyleProfile();
-
-        // Update AI analysis engine with the profile
-        if (this.userStyleProfile) {
-            this.aiAnalysisEngine.updateStyleProfile(this.userStyleProfile);
-        }
-    }
-
-    /**
-     * Load user's style profile from chrome storage
-     * @private
-     */
-    async loadUserStyleProfile() {
-        try {
-            const result = await chrome.storage.local.get(['styleProfile']);
-            if (result.styleProfile) {
-                this.userStyleProfile = result.styleProfile;
-                console.log('📋 Style profile loaded for product analysis:', {
-                    colors: this.userStyleProfile.color_palette?.best_colors?.length || 0,
-                    styles: this.userStyleProfile.style_categories?.length || 0,
-                    generated: new Date(this.userStyleProfile.generated_at).toLocaleDateString()
-                });
-            } else {
-                console.log('⚠️ No style profile found - product analysis will be limited');
-            }
-        } catch (error) {
-            console.error('Failed to load style profile:', error);
-        }
     }
 
     /**
@@ -150,96 +111,186 @@ export class ContentScriptManager {
     }
 
     /**
-     * Initialize product page specific features
+     * Initialize for product pages
      * @private
      */
-    initializeProductPage() {
-        console.log('🛍️ Setting up product page features...');
-        this.testSelectors();
+    async initializeProductPage() {
+        // Wait a bit for product images to load
+        setTimeout(async () => {
+            await this.detectProductImages();
+        }, 500);
+    }
 
-        // Start detection after a delay to allow dynamic content to load
+    /**
+     * Initialize for listing pages (category, search)
+     * @private
+     */
+    async initializeListingPage() {
+        // Wait for page to settle
         setTimeout(async () => {
             await this.detectProductImages();
         }, 1000);
     }
 
     /**
-     * Initialize listing page specific features
+     * Initialize for general pages
      * @private
      */
-    initializeListingPage() {
-        console.log('📋 Setting up listing page features...');
-        this.testSelectors();
-
-        // Start detection with longer delay for grid loading
+    async initializeGeneralPage() {
         setTimeout(async () => {
             await this.detectProductImages();
-        }, 1500);
+        }, 1000);
     }
 
     /**
-     * Initialize general page features
-     * @private
-     */
-    initializeGeneralPage() {
-        console.log('🏠 Setting up general page features...');
-        this.testSelectors();
-
-        // Delayed detection for dynamic content
-        setTimeout(async () => {
-            await this.detectProductImages();
-        }, 2000);
-    }
-
-    /**
-     * Set up all event listeners
+     * Set up event listeners
      * @private
      */
     setupEventListeners() {
-        // Set up Chrome extension message listeners
-        this.eventListeners.setupMessageListeners(this);
-
-        // Set up navigation listeners for SPA support
         this.eventListeners.setupNavigationListener(() => {
             this.handleNavigationChange();
         });
 
-        // Set up lazy loading detection
         this.eventListeners.setupLazyLoadingDetection(() => {
             this.handleNewImagesDetected();
+        });
+
+        this.eventListeners.setupMessageListeners((message) => {
+            this.handleMessage(message);
         });
     }
 
     /**
-     * Set up viewport-based analysis system
+     * Set up viewport-based analysis with IntersectionObserver
+     * Detects images as they scroll into view
      * @private
      */
     setupViewportAnalysis() {
-        if (!('IntersectionObserver' in window) || !this.viewportAnalysisEnabled) {
+        if (!this.viewportAnalysisEnabled) {
+            console.log('⚠️ Viewport analysis is disabled');
             return;
         }
 
+        const observerOptions = {
+            root: null,
+            rootMargin: '300px', // Start analyzing 300px before image enters viewport
+            threshold: 0.01
+        };
+
         this.analysisObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
-                if (entry.isIntersecting && entry.target.tagName === 'IMG') {
+                if (entry.isIntersecting) {
                     const img = entry.target;
+                    console.log('👁️ Image entered viewport:', {
+                        alt: img.alt,
+                        src: img.src.substring(0, 50),
+                        hasDetectedFlag: img.dataset.aiStyleDetected,
+                        hasAnalyzingFlag: img.dataset.aiAnalyzing
+                    });
 
-                    // Check if it's a detected clothing image that needs style analysis
-                    if (img.dataset.aiStyleDetected === 'true' && !img.dataset.styleAnalyzed) {
-                        this.analyzeProductInViewport(img);
+                    if (!img.dataset.aiStyleDetected && !img.dataset.aiAnalyzing) {
+                        console.log('🔄 Triggering analysis for scrolled image');
+                        this.analyzeNewImage(img);
+                    } else {
+                        console.log('⏭️ Skipping image (already processed)');
                     }
                 }
             });
-        }, {
-            rootMargin: '50px',
-            threshold: 0.1
+        }, observerOptions);
+
+        console.log('✅ IntersectionObserver created successfully');
+    }
+
+    /**
+     * Observe all images on the page for lazy detection
+     */
+    observeAllImages() {
+        if (!this.analysisObserver) {
+            console.log('❌ No analysisObserver found - cannot observe images');
+            return;
+        }
+
+        const allImages = document.querySelectorAll('img');
+        let observedCount = 0;
+
+        allImages.forEach(img => {
+            if (!img.dataset.aiStyleDetected && !img.dataset.aiAnalyzing) {
+                this.analysisObserver.observe(img);
+                observedCount++;
+            }
         });
 
-        // Start observing all detected images
-        document.querySelectorAll('[data-ai-style-detected="true"]').forEach(img => {
-            this.analysisObserver.observe(img);
-        });
+        console.log(`👁️ Total images on page: ${allImages.length}`);
+        console.log(`👁️ Images being observed for scroll detection: ${observedCount}`);
+        console.log(`👁️ Images already marked (skipped): ${allImages.length - observedCount}`);
     }
+
+    /**
+     * Analyze a newly visible image
+     * @param {HTMLImageElement} img - Image element to analyze
+     */
+    async analyzeNewImage(img) {
+        // Mark as being analyzed to prevent duplicate analysis
+        img.dataset.aiAnalyzing = 'true';
+
+        try {
+            // Create a temporary array with just this image
+            const candidateImages = [img];
+
+            // Use the same AI callback from imageDetector
+            const imageInfo = this.imageDetector.constructor.name ?
+                { alt: img.alt, src: img.src.substring(0, 50) } :
+                { alt: img.alt, src: img.src };
+
+            // Check visibility
+            const visibilityCheck = this.imageDetector.visibilityChecker.isImageVisible(img);
+            if (!visibilityCheck.isVisible) {
+                img.dataset.aiStyleDetected = 'false';
+                delete img.dataset.aiAnalyzing;
+                return;
+            }
+
+            // Check quality
+            const quality = this.imageDetector.visibilityChecker.checkImageQuality(img);
+            if (!quality.isValid) {
+                img.dataset.aiStyleDetected = 'false';
+                delete img.dataset.aiAnalyzing;
+                return;
+            }
+
+            // Run AI detection
+            if (this.imageDetector.isClothingImageCallback) {
+                const isClothing = await this.imageDetector.isClothingImageCallback(img);
+
+                if (isClothing.isClothing) {
+                    const currentCount = this.detectedProducts.length;
+                    const result = {
+                        element: img,
+                        imageInfo: { alt: img.alt, src: img.src },
+                        reason: isClothing.reasoning || 'AI detected as clothing',
+                        confidence: isClothing.confidence || 0.8,
+                        method: isClothing.method || 'ai_classification'
+                    };
+
+                    // Add indicator
+                    this.visualIndicators.addDetectedImageIndicator(result, currentCount);
+                    this.detectedProducts.push(result);
+
+                    img.dataset.aiStyleDetected = 'true';
+                    console.log(`✅ Scroll detected image ${currentCount + 1}: ${img.alt || img.src.substring(0, 50)}`);
+                } else {
+                    img.dataset.aiStyleDetected = 'false';
+                }
+            }
+
+            delete img.dataset.aiAnalyzing;
+        } catch (error) {
+            console.error('Error analyzing new image:', error);
+            delete img.dataset.aiAnalyzing;
+            img.dataset.aiStyleDetected = 'false';
+        }
+    }
+
 
     /**
      * Main product image detection method
@@ -259,7 +310,7 @@ export class ContentScriptManager {
             // Use ImageDetector for the main detection logic
             const results = await this.imageDetector.detectProductImages(options);
 
-            // Add visual indicators
+            // Add visual indicators (basic green borders only, no scores)
             this.visualIndicators.addVisualIndicators(results.detectedImages, results.rejectedImages);
 
             // Log results if debug mode is enabled
@@ -277,12 +328,10 @@ export class ContentScriptManager {
                 site: this.currentSite.name
             };
 
-            // Set up viewport analysis for new images
-            if (this.analysisObserver && results.detectedImages.length > 0) {
-                results.detectedImages.forEach(item => {
-                    this.analysisObserver.observe(item.element);
-                });
-            }
+            // Scroll observer disabled - all images detected at once
+            // if (this.analysisObserver) {
+            //     this.observeAllImages();
+            // }
 
             // Hide loading animation
             this.loadingAnimations.hideLoadingAnimation();
@@ -309,47 +358,16 @@ export class ContentScriptManager {
      * @returns {Promise<Object>} Detection results for new images
      */
     async detectNewImages() {
-        if (!this.imageDetector) {
-            return { detectedImages: [], rejectedImages: [] };
+        if (!this.currentSite) return { detectedImages: [], rejectedImages: [] };
+
+        const results = await this.imageDetector.detectNewImages();
+
+        if (results.detectedImages.length > 0) {
+            this.visualIndicators.addVisualIndicators(results.detectedImages, results.rejectedImages);
+            this.detectedProducts.push(...results.detectedImages);
         }
 
-        this.loadingAnimations.showLoadingAnimation('Analyzing new products...');
-
-        try {
-            const results = await this.imageDetector.detectNewImages();
-
-            if (results.detectedImages.length > 0) {
-                // Calculate start index for new images
-                const existingDetected = document.querySelectorAll('[data-ai-style-detected="true"]').length;
-                const startIndex = existingDetected - results.detectedImages.length;
-
-                // Add visual indicators
-                this.visualIndicators.addVisualIndicators(results.detectedImages, results.rejectedImages, startIndex);
-
-                // Set up viewport analysis
-                if (this.analysisObserver) {
-                    results.detectedImages.forEach(item => {
-                        this.analysisObserver.observe(item.element);
-                    });
-                }
-
-                // Update stored products
-                this.detectedProducts = [...this.detectedProducts, ...results.detectedImages];
-
-                this.loadingAnimations.showSuccessMessage(
-                    `Found ${results.detectedImages.length} new items`
-                );
-            } else {
-                this.loadingAnimations.hideLoadingAnimation();
-            }
-
-            return results;
-
-        } catch (error) {
-            console.error('New image detection failed:', error);
-            this.loadingAnimations.hideLoadingAnimation();
-            return { detectedImages: [], rejectedImages: [] };
-        }
+        return results;
     }
 
     /**
@@ -359,33 +377,7 @@ export class ContentScriptManager {
      * @private
      */
     async isClothingImageCallback(img) {
-        // This integrates ImageClassifier functionality into the detection pipeline
-        return await this.aiAnalysisEngine.imageClassifier.isClothingImage(img);
-    }
-
-    /**
-     * Analyze product for style compatibility when it enters viewport
-     * @param {HTMLImageElement} img - Image element
-     * @private
-     */
-    async analyzeProductInViewport(img) {
-        if (!this.userStyleProfile) {
-            return;
-        }
-
-        try {
-            const analysis = await this.aiAnalysisEngine.analyzeProduct(img);
-
-            // Mark as analyzed to prevent re-analysis
-            img.dataset.styleAnalyzed = 'true';
-
-            // Update visual indicators with style analysis
-            // This would require extending VisualIndicators to update existing overlays
-            console.log(`🎨 Style analysis complete for viewport image: ${analysis.score}/10`);
-
-        } catch (error) {
-            console.log('Style analysis failed for viewport image:', error);
-        }
+        return await this.aiAnalysisEngine.isClothingImage(img);
     }
 
     /**
@@ -404,17 +396,10 @@ export class ContentScriptManager {
      */
     clearProductDetection() {
         this.visualIndicators.clearProductDetection();
-        this.aiAnalysisEngine.resetAnalysisState();
         this.detectedProducts = [];
         this.processedImages.clear();
         this.lastDetectionResults = null;
-
-        if (this.analysisObserver) {
-            this.analysisObserver.disconnect();
-            this.setupViewportAnalysis();
-        }
-
-        console.log('🧹 All product detection cleared');
+        console.log('🧹 Product detection cleared');
     }
 
     /**
@@ -422,7 +407,6 @@ export class ContentScriptManager {
      */
     enableDebugMode() {
         this.debugInterface.enableDebugMode();
-        this.visualIndicators.setDebugMode(true);
         this.imageDetector.enableDebugMode();
         console.log('🐛 Debug mode enabled across all components');
     }
@@ -432,7 +416,6 @@ export class ContentScriptManager {
      */
     disableDebugMode() {
         this.debugInterface.disableDebugMode();
-        this.visualIndicators.setDebugMode(false);
         this.imageDetector.disableDebugMode();
         console.log('🐛 Debug mode disabled across all components');
     }
@@ -446,7 +429,6 @@ export class ContentScriptManager {
             lastResults: this.lastDetectionResults,
             detectedProducts: this.detectedProducts.length,
             processedImages: this.processedImages.size,
-            aiStats: this.aiAnalysisEngine.getAnalysisStats(),
             indicatorStats: this.visualIndicators.getIndicatorStats(),
             debugStats: this.debugInterface.getAnalysisStatistics()
         };
@@ -503,6 +485,32 @@ export class ContentScriptManager {
     }
 
     /**
+     * Handle messages from background script or popup
+     * @param {Object} message - Message object
+     * @private
+     */
+    handleMessage(message) {
+        switch (message.action) {
+            case 'detectProducts':
+                this.detectProductImages();
+                break;
+            case 'clearDetection':
+                this.clearProductDetection();
+                break;
+            case 'enableDebug':
+                this.enableDebugMode();
+                break;
+            case 'disableDebug':
+                this.disableDebugMode();
+                break;
+            case 'getStats':
+                return this.getDetectionStats();
+            default:
+                console.log('Unknown message:', message);
+        }
+    }
+
+    /**
      * Notify background script of initialization
      * @private
      */
@@ -513,63 +521,14 @@ export class ContentScriptManager {
                 site: this.currentSite?.name || 'unknown',
                 pageType: this.pageType,
                 url: this.currentUrl
-            }).catch(() => {
-                // Ignore connection errors during page transitions
             });
         } catch (error) {
-            // Ignore runtime errors during cleanup
+            console.log('Could not notify background script:', error);
         }
     }
+}
 
-    /**
-     * Update site configuration (useful for dynamic updates)
-     * @param {Object} newSiteConfig - New site configuration
-     */
-    updateSiteConfig(newSiteConfig) {
-        this.currentSite = newSiteConfig;
-        this.candidateFinder.updateSiteConfig(newSiteConfig);
-        this.imageDetector.updateSiteConfig(newSiteConfig);
-        console.log('🔄 Site configuration updated');
-    }
-
-    /**
-     * Cleanup all resources
-     */
-    cleanup() {
-        // Clean up observers
-        if (this.analysisObserver) {
-            this.analysisObserver.disconnect();
-        }
-
-        // Clean up UI components
-        this.loadingAnimations.cleanup();
-        this.visualIndicators.cleanup();
-        this.debugInterface.cleanup();
-
-        // Clean up event listeners
-        this.eventListeners.cleanup();
-
-        // Reset state
-        this.detectedProducts = [];
-        this.processedImages.clear();
-        this.isInitialized = false;
-
-        console.log('🧹 ContentScriptManager cleanup complete');
-    }
-
-    /**
-     * Get comprehensive status information
-     * @returns {Object} Status information
-     */
-    getStatus() {
-        return {
-            initialized: this.isInitialized,
-            site: this.currentSite?.name || 'Unknown',
-            pageType: this.pageType,
-            detectedProducts: this.detectedProducts.length,
-            debugMode: this.debugInterface.isDebugEnabled(),
-            aiReady: this.aiAnalysisEngine ? this.aiAnalysisEngine.isAIReady() : false,
-            timestamp: Date.now()
-        };
-    }
+// Also expose on window for backward compatibility
+if (typeof window !== 'undefined') {
+    window.ContentScriptManager = ContentScriptManager;
 }

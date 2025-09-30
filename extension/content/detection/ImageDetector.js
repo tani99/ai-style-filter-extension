@@ -69,6 +69,7 @@ export class ImageDetector {
                 // Quick exclusion check (fast)
                 const visibilityCheck = this.visibilityChecker.isImageVisible(img);
                 if (!visibilityCheck.isVisible) {
+                    console.log(`❌ Image ${globalIndex + 1} rejected (visibility): ${imageInfo.alt || imageInfo.srcShort} - ${visibilityCheck.reason}`);
                     return {
                         type: 'rejected',
                         element: img,
@@ -82,6 +83,7 @@ export class ImageDetector {
                 // Quality check
                 const quality = this.visibilityChecker.checkImageQuality(img);
                 if (!quality.isValid) {
+                    console.log(`❌ Image ${globalIndex + 1} rejected (quality): ${imageInfo.alt || imageInfo.srcShort} - ${quality.reason}`);
                     return {
                         type: 'rejected',
                         element: img,
@@ -98,6 +100,7 @@ export class ImageDetector {
                         const isClothing = await this.isClothingImageCallback(img);
 
                         if (isClothing.isClothing) {
+                            console.log(`✅ Image ${globalIndex + 1} detected: ${imageInfo.alt || imageInfo.srcShort} - ${isClothing.reasoning || 'AI detected as clothing'}`);
                             return {
                                 type: 'detected',
                                 element: img,
@@ -107,6 +110,7 @@ export class ImageDetector {
                                 method: isClothing.method || 'ai_classification'
                             };
                         } else {
+                            console.log(`❌ Image ${globalIndex + 1} rejected (AI): ${imageInfo.alt || imageInfo.srcShort} - ${isClothing.reasoning || 'AI rejected as non-clothing'}`);
                             return {
                                 type: 'rejected',
                                 element: img,
@@ -117,9 +121,10 @@ export class ImageDetector {
                             };
                         }
                     } catch (error) {
-                        console.log(`⚠️ AI analysis failed for image ${globalIndex + 1}:`, error);
+                        console.log(`⚠️ AI analysis failed for image ${globalIndex + 1}: ${imageInfo.alt || imageInfo.srcShort}`, error.message);
                         // Fallback to context analysis
                         const contextResult = this.analyzeImageContext(img);
+                        console.log(`${contextResult.isClothing ? '✅' : '❌'} Image ${globalIndex + 1} ${contextResult.isClothing ? 'detected' : 'rejected'} (context): ${imageInfo.alt || imageInfo.srcShort} - ${contextResult.reasoning}`);
                         return {
                             type: contextResult.isClothing ? 'detected' : 'rejected',
                             element: img,
@@ -253,33 +258,33 @@ export class ImageDetector {
         const results = await Promise.all(imageProcessingPromises);
 
         // Separate and mark results
-        const detectedImages = results.filter(result => result.type === 'detected');
-        const rejectedImages = results.filter(result => result.type === 'rejected');
+        const newDetectedImages = results.filter(result => result.type === 'detected');
+        const newRejectedImages = results.filter(result => result.type === 'rejected');
 
         // Update existing detected products list
-        if (detectedImages.length > 0) {
+        if (newDetectedImages.length > 0) {
             const existingDetectedImages = document.querySelectorAll('[data-ai-style-detected="true"]');
             const startIndex = existingDetectedImages.length;
 
-            detectedImages.forEach((result, localIndex) => {
+            newDetectedImages.forEach((result, localIndex) => {
                 const index = startIndex + localIndex;
                 result.element.dataset.aiStyleDetected = 'true';
                 result.element.dataset.aiStyleIndex = index;
             });
 
-            this.detectedProducts = [...this.detectedProducts, ...detectedImages];
+            this.detectedProducts = [...this.detectedProducts, ...newDetectedImages];
         }
 
         // Mark rejected images
-        rejectedImages.forEach(result => {
+        newRejectedImages.forEach(result => {
             result.element.dataset.aiStyleDetected = 'false';
         });
 
         console.log(`✅ New image detection complete:`);
-        console.log(`  🎯 Detected: ${detectedImages.length} new clothing images`);
-        console.log(`  ❌ Rejected: ${rejectedImages.length} new images`);
+        console.log(`  🎯 Detected: ${newDetectedImages.length} new clothing images`);
+        console.log(`  ❌ Rejected: ${newRejectedImages.length} new images`);
 
-        return { detectedImages, rejectedImages };
+        return { detectedImages: newDetectedImages, rejectedImages: newRejectedImages };
     }
 
     /**
