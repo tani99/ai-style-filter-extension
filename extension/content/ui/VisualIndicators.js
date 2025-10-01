@@ -223,7 +223,14 @@ export class VisualIndicators {
         if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
             console.log('   Removing existing score badge');
             overlayData.scoreBadge.remove();
+            overlayData.scoreBadge = null;
         }
+
+        // Also remove any orphaned badges with the same target index (cleanup)
+        document.querySelectorAll(`[data-ai-style-score-badge][data-target-index="${index}"]`).forEach(badge => {
+            console.log('   Removing orphaned badge for index', index);
+            badge.remove();
+        });
 
         // Create score badge
         console.log('   Creating score badge...');
@@ -298,24 +305,66 @@ export class VisualIndicators {
         const badge = document.createElement('div');
         badge.className = 'ai-style-score-badge';
 
-        // Determine color based on score
-        let backgroundColor, textColor;
-        if (score >= 8) {
+        // Determine color and content based on score
+        let backgroundColor, textColor, badgeContent;
+        if (score >= 9) {
+            // Perfect match: cute yellow badge at top center with sparkle
+            badge.style.cssText = `
+                position: absolute;
+                background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+                color: #78350f;
+                font-weight: 800;
+                font-size: 11px;
+                padding: 4px 10px;
+                border-radius: 12px;
+                box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4), 0 0 15px rgba(251, 191, 36, 0.3);
+                z-index: 9999;
+                pointer-events: auto;
+                cursor: help;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                text-align: center;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                border: 2px solid #fef3c7;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                animation: perfectMatchPulse 2s ease-in-out infinite;
+            `;
+
+            // Add sparkle emoji and text
+            badge.innerHTML = `
+                <span style="font-size: 12px;">✨</span>
+                <span style="font-weight: 800;">Perfect Match</span>
+                <span style="font-size: 12px;">✨</span>
+            `;
+            badge.title = `${score}/10 - ${reasoning}`;
+            badge.dataset.aiStyleScoreBadge = 'perfect';
+
+            // Add animation keyframes if not already added
+            this.ensurePerfectMatchAnimation();
+
+            return badge;
+        } else if (score >= 8) {
             // Excellent match: green
             backgroundColor = '#10b981';
             textColor = '#ffffff';
+            badgeContent = `${score}`;
         } else if (score >= 6) {
             // Good match: blue
             backgroundColor = '#3b82f6';
             textColor = '#ffffff';
+            badgeContent = `${score}`;
         } else if (score >= 4) {
             // Neutral: yellow
             backgroundColor = '#f59e0b';
             textColor = '#000000';
+            badgeContent = `${score}`;
         } else {
             // Poor match: red
             backgroundColor = '#ef4444';
             textColor = '#ffffff';
+            badgeContent = `${score}`;
         }
 
         badge.style.cssText = `
@@ -335,7 +384,7 @@ export class VisualIndicators {
             text-align: center;
         `;
 
-        badge.textContent = `${score}`;
+        badge.textContent = badgeContent;
         badge.title = reasoning;
         badge.dataset.aiStyleScoreBadge = 'true';
 
@@ -343,7 +392,32 @@ export class VisualIndicators {
     }
 
     /**
-     * Position score badge at top-right of image
+     * Ensure perfect match animation CSS is added to document
+     * @private
+     */
+    ensurePerfectMatchAnimation() {
+        if (!document.querySelector('#ai-style-perfect-match-animation')) {
+            const style = document.createElement('style');
+            style.id = 'ai-style-perfect-match-animation';
+            style.textContent = `
+                @keyframes perfectMatchPulse {
+                    0%, 100% {
+                        transform: scale(1);
+                        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4), 0 0 15px rgba(251, 191, 36, 0.3);
+                    }
+                    50% {
+                        transform: scale(1.08);
+                        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.6), 0 0 25px rgba(251, 191, 36, 0.5);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
+    /**
+     * Position score badge at top-right or top-center of image
+     * Perfect Match badges (9-10) go to top-center, straddling the border (half in, half out)
      * @param {HTMLElement} badge - Score badge element
      * @param {HTMLImageElement} img - Target image element
      */
@@ -352,8 +426,23 @@ export class VisualIndicators {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
-        badge.style.top = `${rect.top + scrollTop + 8}px`;
-        badge.style.left = `${rect.right + scrollLeft - 60}px`; // 60px from right edge
+        // Check if this is a Perfect Match badge
+        if (badge.dataset.aiStyleScoreBadge === 'perfect') {
+            // Position at top-center of image, straddling the top border
+            // Half of badge above image, half below (sitting on the border line)
+            const badgeWidth = badge.offsetWidth || 120; // Approximate width if not yet rendered
+            const badgeHeight = badge.offsetHeight || 24; // Approximate height
+
+            // Center horizontally
+            badge.style.left = `${rect.left + scrollLeft + (rect.width / 2) - (badgeWidth / 2)}px`;
+
+            // Position vertically so badge straddles the top border (half in, half out)
+            badge.style.top = `${rect.top + scrollTop - (badgeHeight / 2)}px`;
+        } else {
+            // Regular badges at top-right
+            badge.style.top = `${rect.top + scrollTop + 8}px`;
+            badge.style.left = `${rect.right + scrollLeft - 60}px`; // 60px from right edge
+        }
     }
 
     /**

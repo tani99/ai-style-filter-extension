@@ -18,9 +18,40 @@
                 <span class="icon">👕</span>
                 Open Style Dashboard
             </button>
-            
+
+            <!-- Filter Controls Section -->
+            <div class="filter-section">
+                <div class="filter-header">
+                    <h3>🎨 Style Filter</h3>
+                </div>
+
+                <!-- My Style Mode Toggle -->
+                <div class="filter-control">
+                    <label class="toggle-label">
+                        <span>My Style Mode</span>
+                        <div class="toggle-container">
+                            <input type="checkbox" id="myStyleToggle" class="toggle-input">
+                            <div class="toggle-switch"></div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Match Sensitivity Slider -->
+                <div class="filter-control">
+                    <div class="slider-label">
+                        <span>Match Sensitivity</span>
+                        <span id="sensitivityValue" class="value-display">6/10</span>
+                    </div>
+                    <input type="range" id="sensitivitySlider" min="1" max="10" value="6" step="1" class="slider">
+                    <div class="slider-hints">
+                        <span class="hint-left">More variety</span>
+                        <span class="hint-right">Perfect matches</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="status">
-                <p id="statusText">Ready to analyze your style!</p>
+                <p id="statusText">Ready to filter your style!</p>
             </div>
         </div>
         

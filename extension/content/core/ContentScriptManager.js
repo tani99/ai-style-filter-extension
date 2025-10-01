@@ -1008,6 +1008,9 @@ export class ContentScriptManager {
      */
     showFilterControls() {
         this.filterControls.showControls();
+        // Sync FilterControls UI with FilterStateManager state
+        const currentState = this.filterStateManager.getFilterState();
+        this.filterControls.setFilterState(currentState);
     }
 
     /**

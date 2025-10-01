@@ -10,7 +10,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Check AI status
     checkAIStatus();
-    
+
+    // Check Gemini API status
+    checkGeminiAPIStatus();
+
     // Load existing photos and style profile
     loadSavedPhotos();
     loadSavedStyleProfile();
@@ -108,6 +111,36 @@ function setupEventListeners() {
         sensitivityValue.textContent = e.target.value;
         saveSetting('sensitivity', e.target.value);
     });
+
+    // Gemini API setup
+    const saveAPIKeyBtn = document.getElementById('saveAPIKeyBtn');
+    const showAPIKeyBtn = document.getElementById('showAPIKeyBtn');
+    const geminiAPIKeyInput = document.getElementById('geminiAPIKeyInput');
+    const testTryOnBtn = document.getElementById('testTryOnBtn');
+    const userPhotoSelect = document.getElementById('userPhotoSelect');
+    const clothingImageInput = document.getElementById('clothingImageInput');
+
+    if (saveAPIKeyBtn) {
+        saveAPIKeyBtn.addEventListener('click', saveGeminiAPIKey);
+    }
+
+    if (showAPIKeyBtn) {
+        showAPIKeyBtn.addEventListener('click', () => {
+            geminiAPIKeyInput.type = geminiAPIKeyInput.type === 'password' ? 'text' : 'password';
+        });
+    }
+
+    if (testTryOnBtn) {
+        testTryOnBtn.addEventListener('click', testVirtualTryOn);
+    }
+
+    if (userPhotoSelect) {
+        userPhotoSelect.addEventListener('change', updateTryOnButton);
+    }
+
+    if (clothingImageInput) {
+        clothingImageInput.addEventListener('change', updateTryOnButton);
+    }
 }
 
 function handleFileSelect(event) {
@@ -305,6 +338,7 @@ async function loadSavedPhotos() {
     const photos = await getStoredPhotos();
     photos.forEach(photo => displayPhoto(photo));
     updateAnalyzeButton();
+    updateUserPhotoSelect();
 }
 
 async function loadSavedStyleProfile() {
@@ -1539,3 +1573,7 @@ function cancelProfileEditing() {
 }
 
 // Photo deletion now handled by event listeners
+
+// ========================================
+
+// Gemini API Virtual Try-On functions have been moved to gemini/gemini-ui.js

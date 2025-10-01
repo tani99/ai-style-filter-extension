@@ -1,3 +1,5 @@
+import { FILTER_DEFAULTS } from '../config/FilterDefaults.js';
+
 /**
  * FilterControls manages the UI for style-based filtering controls
  * Provides toggle switches, sliders, and filter options
@@ -14,12 +16,8 @@ export class FilterControls {
         this.dragOffset = { x: 0, y: 0 };
         this.currentPosition = { x: window.innerWidth - 320, y: 80 }; // Default position (top-right)
 
-        // Filter state
-        this.filterState = {
-            mode: 'all', // 'all' or 'myStyle'
-            scoreThreshold: 6, // Minimum score to show (1-10)
-            selectedCategories: [] // Filter by specific style categories
-        };
+        // Filter state - use shared defaults as single source of truth
+        this.filterState = { ...FILTER_DEFAULTS };
     }
 
     /**
@@ -226,6 +224,15 @@ export class FilterControls {
         `;
 
         toggleContainer.appendChild(toggleKnob);
+
+        // Initialize toggle state based on current filter state
+        if (this.filterState.mode === 'myStyle') {
+            toggleContainer.style.background = '#10b981';
+            toggleKnob.style.transform = 'translateX(24px)';
+        } else {
+            toggleContainer.style.background = 'rgba(255, 255, 255, 0.3)';
+            toggleKnob.style.transform = 'translateX(0)';
+        }
 
         // Handle toggle
         label.onclick = () => {
@@ -548,9 +555,34 @@ export class FilterControls {
      * @private
      */
     updateControlsUI() {
-        // Update UI elements to reflect current state
-        // This would update toggle positions, slider values, etc.
+        if (!this.controlsPanel) return;
+
         console.log('🔄 Updating controls UI to match state:', this.filterState);
+
+        // Update mode toggle
+        const toggleContainer = this.controlsPanel.querySelector('div[style*="width: 52px"]');
+        const toggleKnob = toggleContainer?.querySelector('div');
+        if (toggleContainer && toggleKnob) {
+            if (this.filterState.mode === 'myStyle') {
+                toggleContainer.style.background = '#10b981';
+                toggleKnob.style.transform = 'translateX(24px)';
+            } else {
+                toggleContainer.style.background = 'rgba(255, 255, 255, 0.3)';
+                toggleKnob.style.transform = 'translateX(0)';
+            }
+        }
+
+        // Update score threshold slider
+        const slider = this.controlsPanel.querySelector('input[type="range"]');
+        const scoreDisplay = this.controlsPanel.querySelector('#ai-style-score-display');
+        if (slider) {
+            slider.value = this.filterState.scoreThreshold;
+        }
+        if (scoreDisplay) {
+            scoreDisplay.textContent = `${this.filterState.scoreThreshold}/10`;
+        }
+
+        console.log('✅ Controls UI updated');
     }
 }
 

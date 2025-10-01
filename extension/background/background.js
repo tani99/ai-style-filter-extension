@@ -1,16 +1,21 @@
 // Background service worker for AI Style-Based Shopping Filter + Virtual Try-On
 console.log('AI Style Filter background service worker started');
 
+// Import Gemini API Manager (for Virtual Try-On features)
+importScripts('gemini/GeminiAPIManager.js');
+const geminiManager = new GeminiAPIManager();
+
 // Handle extension installation
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('AI Style Filter extension installed/updated', details.reason);
-    
+
     if (details.reason === 'install') {
         // First time installation
         chrome.storage.local.set({
             'firstInstall': true,
             'styleProfile': null,
-            'userPhotos': []
+            'userPhotos': [],
+            'tryOnCache': {}
         });
     }
 });
@@ -46,7 +51,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             handleContentScriptActive(request.data, sender);
             sendResponse({status: 'acknowledged'});
             break;
-            
+
+        case 'generateTryOn':
+            geminiManager.generateTryOn(request.userPhoto, request.clothingImage, request.options).then(result => {
+                sendResponse(result);
+            });
+            return true; // Keep message channel open for async response
+
+        case 'checkGeminiAPI':
+            geminiManager.checkSetup().then(result => {
+                sendResponse(result);
+            });
+            return true;
+
+        case 'setGeminiAPIKey':
+            geminiManager.setAPIKey(request.apiKey).then(result => {
+                sendResponse(result);
+            });
+            return true;
+
         default:
             console.log('Unknown action:', request.action);
     }
@@ -441,7 +464,7 @@ async function checkChromeAIAvailability() {
                 extensionContext: 'service_worker'
             }
         };
-        
+
     } catch (error) {
         console.error('Error checking AI availability:', error);
         return {
@@ -457,3 +480,7 @@ async function checkChromeAIAvailability() {
         };
     }
 }
+
+
+// Gemini API functions have been moved to gemini/GeminiAPIManager.js
+// and are accessed via the geminiManager instance
