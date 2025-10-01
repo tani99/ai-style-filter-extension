@@ -47,11 +47,11 @@ export class ContentScriptManager {
 
         // UI components
         this.loadingAnimations = new LoadingAnimations();
-        this.visualIndicators = new VisualIndicators();
         this.debugInterface = new DebugInterface();
 
         // Filter components
         this.filterStateManager = new FilterStateManager();
+        this.visualIndicators = new VisualIndicators(false, this.filterStateManager);
         this.filterControls = new FilterControls(this.handleFilterChange.bind(this));
 
         // Event management
@@ -83,6 +83,9 @@ export class ContentScriptManager {
         console.log(`✅ AI Style Filter initializing on ${this.currentSite?.name || 'Unknown site'}`);
         console.log(`📄 Page Type: ${this.pageType}`);
 
+        // Inject reactive filter CSS styles
+        this.injectFilterStyles();
+
         // Load user's style profile
         await this.loadStyleProfile();
 
@@ -107,6 +110,33 @@ export class ContentScriptManager {
 
         this.isInitialized = true;
         console.log('🎉 ContentScriptManager initialization complete');
+    }
+
+    /**
+     * Inject CSS stylesheet for reactive filter styling
+     * @private
+     */
+    injectFilterStyles() {
+        const styleId = 'ai-style-filter-css';
+
+        // Check if already injected
+        if (document.getElementById(styleId)) {
+            console.log('ℹ️ Filter CSS already injected');
+            return;
+        }
+
+        try {
+            const link = document.createElement('link');
+            link.id = styleId;
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = chrome.runtime.getURL('content/styles/FilterStyles.css');
+
+            document.head.appendChild(link);
+            console.log('✅ Filter CSS injected successfully');
+        } catch (error) {
+            console.error('❌ Failed to inject filter CSS:', error);
+        }
     }
 
     /**

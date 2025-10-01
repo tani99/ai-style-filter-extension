@@ -1,0 +1,180 @@
+/**
+ * AI Style Filter - Reactive CSS Styling
+ * Automatically applies visual effects based on data attributes
+ * No JavaScript intervention needed once attributes are set
+ */
+
+/* ========================================
+   BASE STYLES - All Images
+   ======================================== */
+
+/* Base state: All detected images visible normally */
+img[data-ai-style-detected="true"] {
+    opacity: 1;
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* Base state for overlays */
+[data-ai-style-overlay="detected"] {
+    transition: border 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+/* ========================================
+   FILTER MODE: ALL (Show Everything)
+   ======================================== */
+
+/* When filter mode is "all", all images are fully visible */
+img[data-ai-filter-mode="all"] {
+    opacity: 1 !important;
+}
+
+/* ========================================
+   FILTER MODE: MY STYLE (Score-Based Filtering)
+   ======================================== */
+
+/* Score 1 - Very Low Match */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="2"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="3"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="4"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="5"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="6"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="7"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 2 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="3"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="4"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="5"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="6"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="7"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 3 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="4"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="5"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="6"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="7"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 4 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"][data-ai-score-threshold="5"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"][data-ai-score-threshold="6"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"][data-ai-score-threshold="7"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 5 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="5"][data-ai-score-threshold="6"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="5"][data-ai-score-threshold="7"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="5"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="5"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="5"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 6 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="6"][data-ai-score-threshold="7"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="6"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="6"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="6"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 7 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="7"][data-ai-score-threshold="8"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="7"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="7"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 8 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="8"][data-ai-score-threshold="9"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="8"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 9 */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="9"][data-ai-score-threshold="10"] {
+    opacity: 0.3 !important;
+}
+
+/* Score 10 - Perfect match, never dimmed */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="10"] {
+    opacity: 1 !important;
+}
+
+/* ========================================
+   HIGH SCORE HIGHLIGHTING (8-10)
+   ======================================== */
+
+/* Highlight excellent matches with golden border */
+[data-ai-style-overlay="detected"][data-ai-highlighted="true"] {
+    border: 4px solid #fbbf24 !important;
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), inset 0 0 20px rgba(251, 191, 36, 0.3) !important;
+}
+
+/* ========================================
+   PARENT PRODUCT CARD STYLING
+   ======================================== */
+
+/* Apply opacity to parent product cards (site-specific selectors) */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="4"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="5"] {
+    /* This will be handled by JavaScript for parent card dimming */
+}
+
+/* ========================================
+   ANIMATIONS & TRANSITIONS
+   ======================================== */
+
+/* Smooth transitions for all filter changes */
+img[data-ai-style-detected="true"],
+[data-ai-style-overlay="detected"] {
+    transition: opacity 0.3s ease-in-out, border 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+/* ========================================
+   SPINNER ANIMATION (For Loading Indicators)
+   ======================================== */
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
+
+/* Ensure sufficient contrast for dimmed images */
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="1"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="2"],
+img[data-ai-filter-mode="myStyle"][data-ai-style-score="3"] {
+    /* Minimum opacity for visibility */
+    min-opacity: 0.3;
+}
+
+/* Highlight focus states */
+img[data-ai-style-detected="true"]:focus,
+img[data-ai-style-detected="true"]:hover {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}

@@ -4,8 +4,9 @@ import { GeometryUtils } from '../utils/GeometryUtils.js';
  * VisualIndicators manages overlay elements that highlight detected products
  */
 export class VisualIndicators {
-    constructor(debugMode = false) {
+    constructor(debugMode = false, filterStateManager = null) {
         this.debugMode = debugMode;
+        this.filterStateManager = filterStateManager;
         this.overlayMap = new Map(); // Track overlays by image element
         this.updateHandlers = new Map(); // Track event handlers for cleanup
     }
@@ -246,9 +247,30 @@ export class VisualIndicators {
         overlayData.score = score;
         overlayData.reasoning = reasoning;
 
+        // Set highlight attribute for high scores (8-10)
+        if (score >= 8) {
+            overlayData.overlay.dataset.aiHighlighted = 'true';
+        } else {
+            overlayData.overlay.dataset.aiHighlighted = 'false';
+        }
+
         // Update image attributes
         img.dataset.aiStyleScore = score;
         img.title = `Score: ${score}/10 - ${reasoning}`;
+
+        // Set filter state attributes for CSS reactivity
+        if (this.filterStateManager) {
+            const filterState = this.filterStateManager.getFilterState();
+            img.dataset.aiFilterMode = filterState.mode;
+            img.dataset.aiScoreThreshold = filterState.scoreThreshold;
+            console.log('   Filter state attributes set:', {
+                mode: filterState.mode,
+                threshold: filterState.scoreThreshold
+            });
+        } else {
+            console.warn('   ⚠️ No filterStateManager available - filter state not set');
+        }
+
         console.log('   Image data attributes updated');
 
         // Add scroll/resize handlers for score badge
@@ -561,6 +583,123 @@ export class VisualIndicators {
             trackedOverlays: this.overlayMap.size,
             activeHandlers: this.updateHandlers.size
         };
+    }
+
+    /**
+     * Apply visual filtering effects based on filter state
+     * Uses CSS data attributes for reactive styling
+     * @param {Object} filterState - Filter state object
+     */
+    applyFilterEffects(filterState) {
+        console.log('🎨 Applying filter effects via CSS data attributes:', filterState);
+
+        const { mode, scoreThreshold } = filterState;
+
+        // Update all tracked images with new filter state
+        // CSS will automatically handle the visual styling
+        this.overlayMap.forEach((overlayData, img) => {
+            // Update data attributes - CSS rules will react automatically
+            img.dataset.aiFilterMode = mode;
+            img.dataset.aiScoreThreshold = scoreThreshold;
+
+            // Update highlight attribute for high scores (CSS will handle the styling)
+            if (overlayData.score >= 8 && mode === 'myStyle') {
+                overlayData.overlay.dataset.aiHighlighted = 'true';
+            } else {
+                overlayData.overlay.dataset.aiHighlighted = 'false';
+            }
+        });
+
+        console.log('✅ Filter data attributes updated - CSS is now handling visual effects');
+    }
+
+    /**
+     * LEGACY METHOD - Kept for backward compatibility
+     * CSS now handles styling via data attributes
+     * @deprecated Use data attributes instead
+     */
+    dimProduct(img) {
+        console.warn('⚠️ dimProduct() is deprecated - CSS handles styling automatically');
+    }
+
+    /**
+     * LEGACY METHOD - Kept for backward compatibility
+     * CSS now handles styling via data attributes
+     * @deprecated Use data attributes instead
+     */
+    highlightProduct(img) {
+        console.warn('⚠️ highlightProduct() is deprecated - CSS handles styling automatically');
+    }
+
+    /**
+     * LEGACY METHOD - Kept for backward compatibility
+     * CSS now handles styling via data attributes
+     * @deprecated Use data attributes instead
+     */
+    setImageOpacity(img, opacity) {
+        console.warn('⚠️ setImageOpacity() is deprecated - CSS handles styling automatically');
+    }
+
+    /**
+     * LEGACY METHOD - Kept for backward compatibility
+     * CSS now handles styling via data attributes
+     * @deprecated Use data attributes instead
+     */
+    setImageHighlight(img, enabled) {
+        console.warn('⚠️ setImageHighlight() is deprecated - CSS handles styling automatically');
+    }
+
+    /**
+     * Find parent product card element
+     * @param {HTMLImageElement} img - Image element
+     * @returns {HTMLElement|null} Product card element
+     * @private
+     */
+    findProductCard(img) {
+        // Try to find common product card selectors
+        const selectors = [
+            '.product-card',
+            '.product-item',
+            '.product',
+            '[class*="product"]',
+            '[data-product]',
+            'article',
+            '.card'
+        ];
+
+        let element = img.parentElement;
+        let depth = 0;
+        const maxDepth = 5;
+
+        while (element && depth < maxDepth) {
+            for (const selector of selectors) {
+                if (element.matches && element.matches(selector)) {
+                    return element;
+                }
+            }
+            element = element.parentElement;
+            depth++;
+        }
+
+        return null;
+    }
+
+    /**
+     * Clear all filter effects and restore normal appearance
+     * Sets filter mode to 'all' via data attributes
+     */
+    clearFilterEffects() {
+        console.log('🧹 Clearing filter effects...');
+
+        this.overlayMap.forEach((overlayData, img) => {
+            // Set mode to 'all' - CSS will handle restoring normal appearance
+            img.dataset.aiFilterMode = 'all';
+
+            // Clear highlight
+            overlayData.overlay.dataset.aiHighlighted = 'false';
+        });
+
+        console.log('✅ Filter effects cleared via data attributes');
     }
 }
 
