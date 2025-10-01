@@ -14,10 +14,12 @@ import { ProductAnalyzer } from '../ai/ProductAnalyzer.js';
 import { LoadingAnimations } from '../ui/LoadingAnimations.js';
 import { VisualIndicators } from '../ui/VisualIndicators.js';
 import { DebugInterface } from '../ui/DebugInterface.js';
+import { FilterControls } from '../ui/FilterControls.js';
 
 // Utility modules
 import { EventListeners } from '../utils/EventListeners.js';
 import { DOMUtils } from '../utils/DOMUtils.js';
+import { FilterStateManager } from '../utils/FilterStateManager.js';
 
 /**
  * ContentScriptManager is the main orchestrating class that coordinates
@@ -47,6 +49,10 @@ export class ContentScriptManager {
         this.loadingAnimations = new LoadingAnimations();
         this.visualIndicators = new VisualIndicators();
         this.debugInterface = new DebugInterface();
+
+        // Filter components
+        this.filterStateManager = new FilterStateManager();
+        this.filterControls = new FilterControls(this.handleFilterChange.bind(this));
 
         // Event management
         this.eventListeners = new EventListeners(this);
@@ -80,6 +86,10 @@ export class ContentScriptManager {
         // Load user's style profile
         await this.loadStyleProfile();
 
+        // Initialize filter state manager
+        await this.filterStateManager.initialize();
+        this.filterStateManager.addListener(this.handleFilterStateChange.bind(this));
+
         // Initialize based on page type
         this.initializeForPageType();
 
@@ -88,6 +98,9 @@ export class ContentScriptManager {
 
         // Set up viewport analysis
         this.setupViewportAnalysis();
+
+        // Show filter controls on the page automatically
+        this.filterControls.showControls();
 
         // Notify that initialization is complete
         this.notifyBackgroundScript();
@@ -910,9 +923,76 @@ export class ContentScriptManager {
                 break;
             case 'getStats':
                 return this.getDetectionStats();
+            case 'updateFilterState':
+                // Handle filter state updates from popup
+                if (message.filterState) {
+                    console.log('📩 Received filter state from popup:', message.filterState);
+                    this.filterStateManager.updateFilterState(message.filterState);
+                }
+                break;
             default:
                 console.log('Unknown message:', message);
         }
+    }
+
+    /**
+     * Handle filter state changes from FilterStateManager
+     * @param {Object} filterState - New filter state
+     * @private
+     */
+    handleFilterStateChange(filterState) {
+        console.log('🔄 Filter state changed:', filterState);
+        this.applyFilterEffects(filterState);
+    }
+
+    /**
+     * Handle filter changes from FilterControls UI
+     * @param {Object} filterState - New filter state from UI
+     * @private
+     */
+    handleFilterChange(filterState) {
+        console.log('🎛️ Filter controls changed:', filterState);
+        // Update the filter state manager (which will trigger handleFilterStateChange)
+        this.filterStateManager.updateFilterState(filterState);
+    }
+
+    /**
+     * Apply filter effects based on current state
+     * @param {Object} filterState - Filter state to apply
+     * @private
+     */
+    applyFilterEffects(filterState) {
+        console.log('🎨 Applying filter effects to', this.detectedProducts.length, 'products');
+        this.visualIndicators.applyFilterEffects(filterState);
+    }
+
+    /**
+     * Toggle filter controls visibility
+     */
+    toggleFilterControls() {
+        this.filterControls.toggleControls();
+    }
+
+    /**
+     * Show filter controls
+     */
+    showFilterControls() {
+        this.filterControls.showControls();
+    }
+
+    /**
+     * Hide filter controls
+     */
+    hideFilterControls() {
+        this.filterControls.hideControls();
+    }
+
+    /**
+     * Get current filter state
+     * @returns {Object} Current filter state
+     */
+    getFilterState() {
+        return this.filterStateManager.getFilterState();
     }
 
     /**
