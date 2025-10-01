@@ -375,6 +375,7 @@ export class ContentScriptManager {
 
     /**
      * Detect new images (for dynamic content)
+     * Also triggers scoring for newly detected images
      * @returns {Promise<Object>} Detection results for new images
      */
     async detectNewImages() {
@@ -383,11 +384,100 @@ export class ContentScriptManager {
         const results = await this.imageDetector.detectNewImages();
 
         if (results.detectedImages.length > 0) {
-            this.visualIndicators.addVisualIndicators(results.detectedImages, results.rejectedImages);
+            console.log(`🆕 Found ${results.detectedImages.length} new clothing items via lazy loading`);
+
+            // Get the current count before adding new products (for proper indexing)
+            const startIndex = this.detectedProducts.length;
+
+            // Add visual indicators (green borders)
+            this.visualIndicators.addVisualIndicators(results.detectedImages, results.rejectedImages, startIndex);
+
+            // Add to detected products list
             this.detectedProducts.push(...results.detectedImages);
+
+            // If we have a style profile, analyze these new products too
+            if (this.styleProfile) {
+                console.log(`📊 Starting analysis for ${results.detectedImages.length} newly detected products...`);
+
+                // Add loading indicators to new products
+                results.detectedImages.forEach((item, localIndex) => {
+                    const globalIndex = startIndex + localIndex;
+                    this.visualIndicators.addLoadingIndicator(item.element, globalIndex);
+                });
+
+                // Analyze the new products
+                await this.analyzeNewProducts(results.detectedImages, startIndex);
+            }
         }
 
         return results;
+    }
+
+    /**
+     * Analyze newly detected products (from lazy loading)
+     * @param {Array<Object>} newProducts - Array of newly detected product objects
+     * @param {number} startIndex - Starting index for these products in the overall list
+     * @private
+     */
+    async analyzeNewProducts(newProducts, startIndex) {
+        console.log(`🔍 Analyzing ${newProducts.length} new products starting at index ${startIndex}...`);
+
+        const productImages = newProducts.map(product => product.element);
+
+        // Track active analyses
+        let activeAnalyses = 0;
+        let completedCount = 0;
+        let currentIndex = 0;
+
+        // Analyze with controlled concurrency
+        await new Promise((resolve) => {
+            const startNextAnalysis = async () => {
+                if (currentIndex >= productImages.length && activeAnalyses === 0) {
+                    resolve();
+                    return;
+                }
+
+                while (currentIndex < productImages.length && activeAnalyses < this.maxConcurrentAnalyses) {
+                    const localIndex = currentIndex;
+                    const globalIndex = startIndex + localIndex;
+                    const img = productImages[localIndex];
+                    currentIndex++;
+                    activeAnalyses++;
+
+                    console.log(`🔄 Analyzing new product ${globalIndex + 1} (${activeAnalyses} active)`);
+
+                    this.productAnalyzer.analyzeProduct(img, this.styleProfile)
+                        .then((result) => {
+                            this.productAnalysisResults.set(img, result);
+
+                            const product = newProducts[localIndex];
+                            if (product && product.element) {
+                                this.visualIndicators.addScoreOverlay(
+                                    product.element,
+                                    result.score,
+                                    result.reasoning,
+                                    globalIndex
+                                );
+
+                                completedCount++;
+                                console.log(`✅ New product ${globalIndex + 1} scored: ${result.score}/10`);
+                            }
+                        })
+                        .catch((error) => {
+                            console.error(`❌ Failed to analyze new product ${globalIndex + 1}:`, error);
+                            completedCount++;
+                        })
+                        .finally(() => {
+                            activeAnalyses--;
+                            startNextAnalysis();
+                        });
+                }
+            };
+
+            startNextAnalysis();
+        });
+
+        console.log(`✅ Finished analyzing ${completedCount} new products`);
     }
 
     /**
@@ -580,48 +670,86 @@ export class ContentScriptManager {
     }
 
     /**
-     * Analyze all detected products in parallel - show scores as they complete
-     * Much faster than batch analysis - starts all analyses immediately
+     * Analyze all detected products with controlled concurrency
+     * Uses maxConcurrentAnalyses to avoid overwhelming Chrome's AI API
+     * Shows scores as they complete
      * @returns {Promise<void>}
      */
     async analyzeDetectedProductsInParallel() {
         console.log('🚀 analyzeDetectedProductsInParallel called');
         console.log('   Detected products:', this.detectedProducts.length);
+        console.log('   Max concurrent analyses:', this.maxConcurrentAnalyses);
 
         if (!this.styleProfile || this.detectedProducts.length === 0) {
             return;
         }
 
         const productImages = this.detectedProducts.map(product => product.element);
-        console.log(`⚡ Starting parallel analysis of ${productImages.length} products...`);
+        console.log(`⚡ Starting controlled parallel analysis of ${productImages.length} products...`);
 
-        // Start all analyses immediately (don't await)
-        productImages.forEach(async (img, index) => {
-            try {
-                // Analyze this product
-                const result = await this.productAnalyzer.analyzeProduct(img, this.styleProfile);
+        // Track active analyses
+        let activeAnalyses = 0;
+        let completedCount = 0;
+        let currentIndex = 0;
 
-                // Store result
-                this.productAnalysisResults.set(img, result);
-
-                // Update visual indicator immediately (replace loading with score)
-                const product = this.detectedProducts[index];
-                if (product && product.element) {
-                    this.visualIndicators.addScoreOverlay(
-                        product.element,
-                        result.score,
-                        result.reasoning,
-                        index
-                    );
-
-                    console.log(`✅ Product ${index + 1}/${productImages.length} scored: ${result.score}/10`);
+        // Create a promise that resolves when all products are analyzed
+        await new Promise((resolve) => {
+            const startNextAnalysis = async () => {
+                // Check if we're done
+                if (currentIndex >= productImages.length && activeAnalyses === 0) {
+                    resolve();
+                    return;
                 }
-            } catch (error) {
-                console.error(`❌ Failed to analyze product ${index + 1}:`, error);
-            }
+
+                // Start new analyses up to the concurrency limit
+                while (currentIndex < productImages.length && activeAnalyses < this.maxConcurrentAnalyses) {
+                    const index = currentIndex;
+                    const img = productImages[index];
+                    currentIndex++;
+                    activeAnalyses++;
+
+                    console.log(`🔄 Starting analysis ${index + 1}/${productImages.length} (${activeAnalyses} active)`);
+
+                    // Analyze this product (don't await - let it run in background)
+                    this.productAnalyzer.analyzeProduct(img, this.styleProfile)
+                        .then((result) => {
+                            // Store result
+                            this.productAnalysisResults.set(img, result);
+
+                            // Update visual indicator immediately (replace loading with score)
+                            const product = this.detectedProducts[index];
+                            if (product && product.element) {
+                                this.visualIndicators.addScoreOverlay(
+                                    product.element,
+                                    result.score,
+                                    result.reasoning,
+                                    index
+                                );
+
+                                completedCount++;
+                                console.log(`✅ Product ${index + 1}/${productImages.length} scored: ${result.score}/10 (${completedCount} completed)`);
+                            }
+                        })
+                        .catch((error) => {
+                            console.error(`❌ Failed to analyze product ${index + 1}:`, error);
+                            completedCount++;
+                        })
+                        .finally(() => {
+                            // Analysis complete (success or failure)
+                            activeAnalyses--;
+                            console.log(`📊 Analysis complete. Active: ${activeAnalyses}, Completed: ${completedCount}/${productImages.length}`);
+
+                            // Start next analysis
+                            startNextAnalysis();
+                        });
+                }
+            };
+
+            // Start initial batch of analyses
+            startNextAnalysis();
         });
 
-        console.log('⚡ All product analyses started in parallel');
+        console.log(`✅ All ${productImages.length} product analyses complete!`);
     }
 
     /**
