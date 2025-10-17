@@ -245,6 +245,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
             break;
 
+        case 'analyzeWardrobeItem':
+            analyzeWardrobeItem(request.itemId, request.imageUrl, request.category)
+                .then(result => sendResponse({ success: true, analysis: result }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true; // Keep message channel open for async response
+
         default:
             console.log('Unknown action:', request.action);
     }
@@ -445,6 +451,119 @@ async function analyzeAllWardrobeItems(userId) {
     console.log('[Background] All wardrobe items analyzed successfully');
   } catch (error) {
     console.error('[Background] Error analyzing all wardrobe items:', error);
+  }
+}
+
+// Analyze a single wardrobe item and store results in Firestore
+async function analyzeWardrobeItem(itemId, imageUrl, category) {
+  try {
+    if (!db || !itemId) {
+      throw new Error('Missing required parameters: db or itemId');
+    }
+
+    // STEP 1: Check if analysis already exists in Firestore
+    console.log(`[Background] Checking if item ${itemId} already has analysis...`);
+    const itemDoc = await db.collection('wardrobeItems').doc(itemId).get();
+
+    if (!itemDoc.exists) {
+      throw new Error(`Item ${itemId} not found in Firestore`);
+    }
+
+    const existingData = itemDoc.data();
+
+    if (existingData?.aiAnalysis) {
+      console.log(`[Background] Item ${itemId} already has analysis, skipping`);
+      return existingData.aiAnalysis;
+    }
+
+    // STEP 2: No analysis found, make AI call
+    console.log(`[Background] No existing analysis for ${itemId}, analyzing now...`);
+
+    const prompt = `You are a fashion expert analyzing a clothing item for outfit matching purposes.
+
+IMAGE URL: ${imageUrl || 'Not provided'}
+CATEGORY: ${category || 'Unknown'}
+
+TASK: Analyze this clothing item and provide attributes that will help match it with other wardrobe items to create complete outfits.
+
+RESPOND WITH ONLY valid JSON in this exact format:
+{
+  "colors": ["primary color", "secondary color"],
+  "style": ["casual", "formal", "sporty", "bohemian", "minimalist"],
+  "pattern": "solid/striped/floral/plaid/geometric/printed",
+  "formality": "casual/business casual/formal/athletic",
+  "season": ["spring", "summer", "fall", "winter"],
+  "versatility_score": 8,
+  "description": "Brief 1-2 sentence description of the item"
+}
+
+IMPORTANT:
+- colors array should contain 1-3 dominant colors (use specific color names like "navy blue", "burgundy", "cream")
+- style array can have multiple matching styles
+- versatility_score is 1-10, where 10 means extremely versatile
+- Keep description concise and focused on visual characteristics
+- Ensure the response is valid JSON only, no additional text`;
+
+    const aiResult = await executeAIPrompt(prompt, {
+      temperature: 0.7,
+      maxRetries: 3
+    });
+
+    if (!aiResult.success) {
+      throw new Error(`AI analysis failed: ${aiResult.error}`);
+    }
+
+    // STEP 3: Parse the AI response
+    console.log(`[Background] AI response received for ${itemId}, parsing...`);
+    let analysis;
+
+    try {
+      // Try to parse the response as JSON
+      const responseText = aiResult.response.trim();
+
+      // Remove markdown code blocks if present
+      const cleanedResponse = responseText
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+
+      analysis = JSON.parse(cleanedResponse);
+
+      // Validate required fields
+      if (!analysis.colors || !analysis.style || !analysis.pattern) {
+        throw new Error('Missing required fields in AI response');
+      }
+
+      console.log(`[Background] Successfully parsed analysis for ${itemId}`);
+    } catch (parseError) {
+      console.error(`[Background] Failed to parse AI response for ${itemId}:`, parseError);
+      console.error('Raw AI response:', aiResult.response);
+
+      // Provide fallback analysis
+      analysis = {
+        colors: ['unknown'],
+        style: ['casual'],
+        pattern: 'unknown',
+        formality: 'casual',
+        season: ['spring', 'summer', 'fall', 'winter'],
+        versatility_score: 5,
+        description: `${category || 'Clothing item'} - analysis failed, using defaults`
+      };
+    }
+
+    // STEP 4: Store analysis in Firestore for permanent reuse
+    console.log(`[Background] Storing analysis for ${itemId} in Firestore...`);
+    await db.collection('wardrobeItems').doc(itemId).update({
+      aiAnalysis: analysis,
+      aiAnalyzedAt: new Date().toISOString()
+    });
+
+    console.log(`[Background] Analysis saved successfully for item ${itemId}`);
+    return analysis;
+
+  } catch (error) {
+    console.error(`[Background] Error analyzing wardrobe item ${itemId}:`, error);
+    throw error;
   }
 }
 
