@@ -1,8 +1,71 @@
 // Background service worker for AI Style-Based Shopping Filter + Virtual Try-On
 console.log('AI Style Filter background service worker started');
 
+// Import Firebase SDK (compat version for service workers)
+importScripts('/lib/firebase/firebase-app-compat.js');
+importScripts('/lib/firebase/firebase-auth-compat.js');
+importScripts('/lib/firebase/firebase-firestore-compat.js');
+
+// Import Firebase config
+importScripts('/config/firebase-config.js');
+
+// Import Firebase managers
+importScripts('/services/FirebaseAuthManager.js');
+importScripts('/services/FirestoreWardrobeManager.js');
+
+// Initialize Firebase
+let app;
+let auth;
+let db;
+let authManager;
+let wardrobeManager;
+
+try {
+  console.log('🔥 Initializing Firebase...');
+  app = firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+
+  // Enable offline persistence
+  db.enablePersistence({ synchronizeTabs: true })
+    .then(() => {
+      console.log('✅ Firestore offline persistence enabled');
+    })
+    .catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn('⚠️ Multiple tabs open, persistence only enabled in first tab');
+      } else if (err.code === 'unimplemented') {
+        console.warn('⚠️ Browser does not support persistence');
+      } else {
+        console.error('❌ Persistence error:', err);
+      }
+    });
+
+  // Initialize auth manager
+  authManager = new FirebaseAuthManager(auth);
+
+  // Initialize wardrobe manager
+  wardrobeManager = new FirestoreWardrobeManager(db);
+
+  console.log('✅ Firebase initialized successfully');
+  console.log('📍 Project:', firebaseConfig.projectId);
+} catch (error) {
+  console.error('❌ Firebase initialization failed:', error);
+}
+
+// Setup/cleanup Firestore listeners on auth state change
+auth.onAuthStateChanged((user) => {
+  if (user && wardrobeManager) {
+    console.log('👤 User authenticated, setting up Firestore listeners');
+    wardrobeManager.setupListeners(user.uid);
+  } else if (wardrobeManager) {
+    console.log('👤 User logged out, cleaning up Firestore listeners');
+    wardrobeManager.cleanupListeners();
+  }
+});
+
 // Import Gemini API Manager (for Virtual Try-On features)
-importScripts('gemini/GeminiAPIManager.js');
+importScripts('/gemini/GeminiAPIManager.js');
 const geminiManager = new GeminiAPIManager();
 
 // Handle extension installation
@@ -69,6 +132,114 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse(result);
             });
             return true;
+
+        // Firebase Authentication handlers
+        case 'firebaseLogin':
+            if (authManager) {
+                authManager.loginWithEmail(request.email, request.password)
+                    .then(result => sendResponse(result));
+            } else {
+                sendResponse({ success: false, error: 'Firebase not initialized' });
+            }
+            return true;
+
+        case 'firebaseSignUp':
+            if (authManager) {
+                authManager.signUpWithEmail(request.email, request.password, request.displayName)
+                    .then(result => sendResponse(result));
+            } else {
+                sendResponse({ success: false, error: 'Firebase not initialized' });
+            }
+            return true;
+
+        case 'firebaseLogout':
+            if (authManager) {
+                authManager.logout()
+                    .then(result => sendResponse(result));
+            } else {
+                sendResponse({ success: false, error: 'Firebase not initialized' });
+            }
+            return true;
+
+        case 'getAuthStatus':
+            if (authManager) {
+                const user = authManager.getCurrentUser();
+                sendResponse({
+                    authenticated: authManager.isAuthenticated(),
+                    user: user ? {
+                        uid: user.uid,
+                        email: user.email,
+                        displayName: user.displayName
+                    } : null
+                });
+            } else {
+                sendResponse({ authenticated: false, user: null });
+            }
+            break;
+
+        case 'testFirebaseConnection':
+            // Test Firebase connectivity
+            sendResponse({
+                success: true,
+                firebaseInitialized: !!app,
+                authInitialized: !!auth,
+                dbInitialized: !!db,
+                authManagerInitialized: !!authManager,
+                wardrobeManagerInitialized: !!wardrobeManager,
+                projectId: firebaseConfig.projectId
+            });
+            break;
+
+        // Firestore Wardrobe handlers
+        case 'getWardrobeItems':
+            if (wardrobeManager && authManager) {
+                const user = authManager.getCurrentUser();
+                if (user) {
+                    wardrobeManager.getItems(user.uid, request.filters || {})
+                        .then(items => sendResponse({ success: true, items }));
+                } else {
+                    sendResponse({ success: false, error: 'Not authenticated' });
+                }
+            } else {
+                sendResponse({ success: false, error: 'Wardrobe manager not initialized' });
+            }
+            return true;
+
+        case 'getLooks':
+            if (wardrobeManager && authManager) {
+                const currentUser = authManager.getCurrentUser();
+                if (currentUser) {
+                    wardrobeManager.getLooks(currentUser.uid)
+                        .then(looks => sendResponse({ success: true, looks }));
+                } else {
+                    sendResponse({ success: false, error: 'Not authenticated' });
+                }
+            } else {
+                sendResponse({ success: false, error: 'Wardrobe manager not initialized' });
+            }
+            return true;
+
+        case 'getCachedWardrobe':
+            if (wardrobeManager) {
+                sendResponse({
+                    success: true,
+                    data: wardrobeManager.getCachedData()
+                });
+            } else {
+                sendResponse({ success: false, data: { items: [], looks: [] } });
+            }
+            break;
+
+        case 'getWardrobeStats':
+            if (wardrobeManager) {
+                sendResponse({
+                    success: true,
+                    stats: wardrobeManager.getStats()
+                });
+            } else {
+                sendResponse({ success: false, stats: { itemCount: 0, lookCount: 0, hasData: false } });
+            }
+            break;
 
         default:
             console.log('Unknown action:', request.action);

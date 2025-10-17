@@ -237,6 +237,10 @@ export class VisualIndicators {
         const scoreBadge = this.createScoreBadge(score, reasoning);
         console.log('   Score badge created:', scoreBadge);
 
+        // Add tracking attribute to badge
+        scoreBadge.dataset.targetIndex = index;
+        scoreBadge.dataset.aiStyleScoreBadge = scoreBadge.dataset.aiStyleScoreBadge || 'true';
+
         console.log('   Positioning score badge...');
         this.positionScoreBadge(scoreBadge, img);
         console.log('   Badge position:', {
@@ -605,10 +609,12 @@ export class VisualIndicators {
 
         // Remove all overlay elements
         const overlays = document.querySelectorAll('[data-ai-style-overlay]');
+        console.log(`   Removing ${overlays.length} overlays`);
         overlays.forEach(overlay => overlay.remove());
 
-        // Remove all score badges
-        const scoreBadges = document.querySelectorAll('[data-ai-style-score-badge]');
+        // Remove all score badges (try multiple selectors to catch all)
+        const scoreBadges = document.querySelectorAll('[data-ai-style-score-badge], .ai-style-score-badge');
+        console.log(`   Removing ${scoreBadges.length} score badges`);
         scoreBadges.forEach(badge => badge.remove());
 
         // Clear all event handlers

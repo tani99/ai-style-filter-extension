@@ -3,20 +3,13 @@
 // Separated from Chrome AI Prompt API functionality
 
 // Gemini API Configuration
-const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-const GEMINI_VISION_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+// Following official documentation: https://ai.google.dev/gemini-api/docs/quickstart
+// Using v1beta as per docs, with x-goog-api-key header authentication
+const GEMINI_API_TEST_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash';
+const GEMINI_IMAGE_GENERATION_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview';
 
-// Note: For actual IMAGE GENERATION (not just analysis), you would need:
-// - Google Imagen 3 API (currently in limited preview)
-// - Stable Diffusion API
-// - DALL-E 3 API
-// - Other image generation services
-//
-// Gemini models (including 2.5 Flash) can ANALYZE images but NOT generate new images.
-// This implementation provides detailed virtual try-on ANALYSIS.
-//
-// When Imagen 3 becomes publicly available, it can be integrated here for actual
-// photorealistic try-on image generation.
+// Note: Gemini 2.5 Flash Image Preview supports both text AND image generation
+// This model can generate actual virtual try-on images, not just text analysis
 
 class GeminiAPIManager {
     constructor() {
@@ -99,12 +92,14 @@ class GeminiAPIManager {
     // Test Gemini API with a simple request
     async testAPI(apiKey) {
         try {
-            const url = `${GEMINI_API_ENDPOINT}?key=${apiKey}`;
+            // Following official docs: use v1beta and x-goog-api-key header
+            const url = `${GEMINI_API_TEST_ENDPOINT}:generateContent`;
 
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
                 },
                 body: JSON.stringify({
                     contents: [{
@@ -165,11 +160,12 @@ class GeminiAPIManager {
             const userPhotoBase64 = this.cleanBase64Image(userPhoto);
             const clothingImageBase64 = this.cleanBase64Image(clothingImage);
 
-            // Create prompt for virtual try-on
-            const prompt = this.createTryOnPrompt(options);
+            // Create prompt for virtual try-on IMAGE GENERATION
+            const prompt = this.createImageGenerationPrompt(options);
 
-            // Call Gemini API
-            const url = `${GEMINI_VISION_ENDPOINT}?key=${result.geminiAPIKey}`;
+            // Call Gemini 2.5 Flash Image Generation API
+            // Following official docs: use v1beta and x-goog-api-key header
+            const url = `${GEMINI_IMAGE_GENERATION_ENDPOINT}:generateContent`;
 
             const requestBody = {
                 contents: [{
@@ -192,22 +188,32 @@ class GeminiAPIManager {
                     ]
                 }],
                 generationConfig: {
-                    temperature: options.temperature || 0.7,
+                    temperature: options.temperature || 0.4,
                     topK: 40,
                     topP: 0.95,
-                    maxOutputTokens: 2048
+                    maxOutputTokens: 8192
                 }
             };
 
             console.log('📤 Sending request to Gemini API...');
+            console.log('🔍 URL:', url);
+            console.log('🔍 Request body structure:', {
+                contentsLength: requestBody.contents.length,
+                partsLength: requestBody.contents[0].parts.length,
+                partTypes: requestBody.contents[0].parts.map(p => p.text ? 'text' : 'image'),
+                config: requestBody.generationConfig
+            });
 
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': result.geminiAPIKey
                 },
                 body: JSON.stringify(requestBody)
             });
+            
+            console.log('📥 Response status:', response.status, response.statusText);
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -216,26 +222,72 @@ class GeminiAPIManager {
 
             const data = await response.json();
             console.log('📥 Received response from Gemini API');
+            
+            // DEBUG: Log the full response structure
+            console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
+            console.log('🔍 Candidates:', data.candidates);
+            console.log('🔍 First Candidate:', data.candidates?.[0]);
+            console.log('🔍 Content:', data.candidates?.[0]?.content);
+            console.log('🔍 Parts:', data.candidates?.[0]?.content?.parts);
 
-            // Extract response
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            // Extract response parts - could contain both text and images
+            const parts = data.candidates?.[0]?.content?.parts;
 
-            if (!responseText) {
-                throw new Error('No response text from Gemini API');
+            if (!parts || parts.length === 0) {
+                console.error('❌ No parts found in response. Full data:', data);
+                throw new Error('No response from Gemini API');
             }
 
-            // Note: Gemini API (as of now) returns text descriptions, not actual generated images
-            // For actual image generation, we would need to use Imagen API or similar
-            // For this implementation, we'll return the description and indicate that image generation
-            // requires a different API endpoint
+            console.log(`🔍 Found ${parts.length} parts in response`);
 
+            // Extract generated image if present
+            let generatedImageBase64 = null;
+            let responseText = null;
+
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                console.log(`🔍 Part ${i}:`, Object.keys(part));
+                
+                if (part.inline_data && part.inline_data.data) {
+                    // Found generated image
+                    generatedImageBase64 = part.inline_data.data;
+                    console.log(`✅ Generated image received from Gemini (Part ${i})`);
+                    console.log(`🔍 Image size: ${generatedImageBase64.length} characters`);
+                } else if (part.inlineData && part.inlineData.data) {
+                    // Try camelCase version
+                    generatedImageBase64 = part.inlineData.data;
+                    console.log(`✅ Generated image received from Gemini - camelCase (Part ${i})`);
+                    console.log(`🔍 Image size: ${generatedImageBase64.length} characters`);
+                } else if (part.text) {
+                    // Found text response
+                    responseText = part.text;
+                    console.log(`📝 Text response received (Part ${i}): ${responseText.substring(0, 100)}...`);
+                } else {
+                    console.log(`⚠️ Unknown part type (Part ${i}):`, part);
+                }
+            }
+
+            // Prepare result
             const result_data = {
                 success: true,
-                description: responseText,
-                note: 'Gemini API currently provides text-based analysis. For actual image generation, consider using Google Imagen API or similar service.',
                 cached: false,
-                message: 'Try-on analysis complete'
+                message: 'Try-on image generated successfully'
             };
+
+            if (generatedImageBase64) {
+                // Convert to data URL for easy display
+                result_data.imageUrl = `data:image/jpeg;base64,${generatedImageBase64}`;
+                result_data.imageBase64 = generatedImageBase64;
+                console.log('🎨 Virtual try-on image generated successfully');
+            }
+
+            if (responseText) {
+                result_data.description = responseText;
+            }
+
+            if (!generatedImageBase64 && !responseText) {
+                throw new Error('No image or text response from Gemini API');
+            }
 
             // Cache the result
             await this.cacheTryOnResult(cacheKey, result_data);
@@ -252,8 +304,23 @@ class GeminiAPIManager {
         }
     }
 
-    // Create prompt for virtual try-on
-    createTryOnPrompt(options = {}) {
+    // Create prompt for image generation virtual try-on
+    createImageGenerationPrompt(options = {}) {
+        return `Generate a realistic virtual try-on image showing the person from the first image wearing the clothing item from the second image.
+
+Requirements:
+- Create a photorealistic image of the person wearing the clothing item
+- Maintain the person's facial features, body proportions, and skin tone exactly as shown
+- Accurately place the clothing item on the person with proper fit and draping
+- Ensure the clothing color, pattern, and style match the product image exactly
+- Keep natural lighting and a clean background
+- Make it look like a professional fashion photograph
+
+The output should be a single high-quality image showing the person wearing the clothing item.`;
+    }
+
+    // Create prompt for virtual try-on analysis (text-based)
+    createTryOnAnalysisPrompt(options = {}) {
         return `You are an expert fashion consultant and virtual try-on assistant.
 
 I have two images:
@@ -412,7 +479,8 @@ Please provide a detailed but concise analysis in JSON format:
             notes: [
                 'The API key is stored locally in your browser only',
                 'Gemini API has a free tier with generous limits',
-                'Virtual try-on requires Gemini 1.5 Flash or Pro model'
+                'Virtual try-on uses Gemini 2.5 Flash Image Preview for actual image generation',
+                'This model can generate photorealistic try-on images, not just text analysis'
             ]
         };
     }

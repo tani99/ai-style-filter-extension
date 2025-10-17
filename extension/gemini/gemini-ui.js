@@ -144,8 +144,8 @@ async function testVirtualTryOn() {
     tryonResult.innerHTML = `
         <div class="loading">
             <div class="loading-spinner"></div>
-            <p>Analyzing virtual try-on...</p>
-            <p class="loading-note">This may take 10-20 seconds</p>
+            <p>Generating virtual try-on image...</p>
+            <p class="loading-note">This may take 10-30 seconds</p>
         </div>
     `;
 
@@ -177,7 +177,7 @@ async function testVirtualTryOn() {
 
         if (response.success) {
             displayTryOnResult(response, clothingImageData);
-            showNotification('Try-on analysis complete!', 'success');
+            showNotification('Try-on image generated successfully!', 'success');
         } else {
             throw new Error(response.error || 'Try-on generation failed');
         }
@@ -194,7 +194,7 @@ async function testVirtualTryOn() {
         showNotification('Try-on failed: ' + error.message, 'error');
     } finally {
         testTryOnBtn.disabled = false;
-        testTryOnBtn.textContent = 'Generate Try-On Analysis';
+        testTryOnBtn.textContent = 'Generate Try-On Image';
     }
 }
 
@@ -203,78 +203,98 @@ function displayTryOnResult(response, clothingImageData) {
     const tryonResult = document.getElementById('tryonResult');
     if (!tryonResult) return;
 
-    // Parse the description if it's JSON
-    let analysisData;
-    try {
-        const descriptionText = response.description;
-        const jsonMatch = descriptionText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            analysisData = JSON.parse(jsonMatch[0]);
-        }
-    } catch (error) {
-        console.log('Could not parse JSON from response, using raw text');
-    }
-
     let resultHTML = `
         <div class="tryon-success">
-            <h4>✨ Virtual Try-On Analysis</h4>
+            <h4>✨ Virtual Try-On Result</h4>
     `;
 
-    // Display clothing image
-    resultHTML += `
-        <div class="clothing-preview">
-            <img src="${clothingImageData}" alt="Clothing item" style="max-width: 200px; border-radius: 8px; margin: 10px 0;">
-        </div>
-    `;
-
-    if (analysisData) {
-        // Display structured analysis
+    // Check if we have a generated image
+    if (response.imageUrl || response.imageBase64) {
+        const imageUrl = response.imageUrl || `data:image/jpeg;base64,${response.imageBase64}`;
+        
         resultHTML += `
-            <div class="analysis-details">
-                <div class="score-section">
-                    <strong>Compatibility Score:</strong>
-                    <span class="score-badge ${analysisData.compatibility_score >= 7 ? 'high' : analysisData.compatibility_score >= 4 ? 'medium' : 'low'}">
-                        ${analysisData.compatibility_score}/10
-                    </span>
+            <div class="tryon-images">
+                <div class="image-container">
+                    <h5>Original Clothing</h5>
+                    <img src="${clothingImageData}" alt="Clothing item" class="tryon-image">
                 </div>
-
-                <div class="analysis-item">
-                    <strong>Fit Analysis:</strong>
-                    <p>${analysisData.fit_analysis}</p>
-                </div>
-
-                <div class="analysis-item">
-                    <strong>Color Match:</strong>
-                    <p>${analysisData.color_match}</p>
-                </div>
-
-                <div class="analysis-item">
-                    <strong>Style Match:</strong>
-                    <p>${analysisData.style_match}</p>
-                </div>
-
-                ${analysisData.styling_suggestions ? `
-                    <div class="analysis-item">
-                        <strong>Styling Suggestions:</strong>
-                        <ul>
-                            ${analysisData.styling_suggestions.map(s => `<li>${s}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-
-                <div class="analysis-item recommendation">
-                    <strong>Overall Recommendation:</strong>
-                    <p>${analysisData.overall_recommendation}</p>
+                <div class="image-container">
+                    <h5>Virtual Try-On</h5>
+                    <img src="${imageUrl}" alt="Virtual try-on result" class="tryon-image generated-image">
                 </div>
             </div>
         `;
     } else {
-        // Display raw description
+        // No generated image, display clothing preview only
         resultHTML += `
-            <div class="analysis-description">
-                <pre>${response.description}</pre>
+            <div class="clothing-preview">
+                <img src="${clothingImageData}" alt="Clothing item" style="max-width: 200px; border-radius: 8px; margin: 10px 0;">
             </div>
         `;
+    }
+
+    // Parse the description if it's JSON (for analysis data)
+    let analysisData;
+    if (response.description) {
+        try {
+            const descriptionText = response.description;
+            const jsonMatch = descriptionText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                analysisData = JSON.parse(jsonMatch[0]);
+            }
+        } catch (error) {
+            console.log('Could not parse JSON from response, using raw text');
+        }
+
+        if (analysisData) {
+            // Display structured analysis
+            resultHTML += `
+                <div class="analysis-details">
+                    <div class="score-section">
+                        <strong>Compatibility Score:</strong>
+                        <span class="score-badge ${analysisData.compatibility_score >= 7 ? 'high' : analysisData.compatibility_score >= 4 ? 'medium' : 'low'}">
+                            ${analysisData.compatibility_score}/10
+                        </span>
+                    </div>
+
+                    <div class="analysis-item">
+                        <strong>Fit Analysis:</strong>
+                        <p>${analysisData.fit_analysis}</p>
+                    </div>
+
+                    <div class="analysis-item">
+                        <strong>Color Match:</strong>
+                        <p>${analysisData.color_match}</p>
+                    </div>
+
+                    <div class="analysis-item">
+                        <strong>Style Match:</strong>
+                        <p>${analysisData.style_match}</p>
+                    </div>
+
+                    ${analysisData.styling_suggestions ? `
+                        <div class="analysis-item">
+                            <strong>Styling Suggestions:</strong>
+                            <ul>
+                                ${analysisData.styling_suggestions.map(s => `<li>${s}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+
+                    <div class="analysis-item recommendation">
+                        <strong>Overall Recommendation:</strong>
+                        <p>${analysisData.overall_recommendation}</p>
+                    </div>
+                </div>
+            `;
+        } else if (!response.imageUrl && !response.imageBase64) {
+            // Display raw description only if we don't have an image
+            resultHTML += `
+                <div class="analysis-description">
+                    <pre>${response.description}</pre>
+                </div>
+            `;
+        }
     }
 
     if (response.cached) {

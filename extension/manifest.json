@@ -3,20 +3,29 @@
   "name": "AI Style-Based Shopping Filter + Virtual Try-On",
   "version": "1.0.0",
   "description": "Use Chrome's built-in AI to create a personal style profile and filter shopping pages to show items that match your aesthetic with virtual try-on.",
-  
+
   "permissions": [
     "activeTab",
     "storage"
   ],
-  
+
   "host_permissions": [
     "*://*.zara.com/*",
     "*://*.hm.com/*",
-    "*://*.nike.com/*"
+    "*://*.nike.com/*",
+    "https://*.firebaseio.com/*",
+    "https://*.googleapis.com/*",
+    "https://firestore.googleapis.com/*",
+    "https://identitytoolkit.googleapis.com/*",
+    "https://securetoken.googleapis.com/*"
   ],
-  
+
   "background": {
     "service_worker": "background/background.js"
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
   
   "content_scripts": [

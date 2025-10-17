@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up event listeners
     setupEventListeners();
     
+    // Set up navigation listeners
+    setupNavigationListeners();
+    
     // Check AI status
     checkAIStatus();
 
@@ -17,6 +20,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load existing photos and style profile
     loadSavedPhotos();
     loadSavedStyleProfile();
+    
+    // Check if user is already logged in to wardrobe
+    checkInitialWardrobeStatus();
     
     // HEIC support temporarily disabled
     // checkHeicSupport();
@@ -1573,6 +1579,83 @@ function cancelProfileEditing() {
 }
 
 // Photo deletion now handled by event listeners
+
+// ========================================
+
+// Navigation Functions for Onboarding
+
+function setupNavigationListeners() {
+    // Choose Upload Path
+    document.getElementById('chooseUploadBtn')?.addEventListener('click', () => {
+        showSection('mainContent');
+    });
+    
+    // Choose Wardrobe Path
+    document.getElementById('chooseWardrobeBtn')?.addEventListener('click', () => {
+        showSection('wardrobeSection');
+    });
+    
+    // Back buttons
+    document.getElementById('backToOptionsBtn')?.addEventListener('click', () => {
+        showSection('gettingStarted');
+    });
+    
+    document.getElementById('backFromWardrobeBtn')?.addEventListener('click', () => {
+        showSection('gettingStarted');
+    });
+    
+    document.getElementById('backFromSettingsBtn')?.addEventListener('click', () => {
+        showSection('gettingStarted');
+    });
+}
+
+function showSection(sectionName) {
+    // Hide all sections
+    const gettingStarted = document.querySelector('.getting-started-section');
+    const mainContent = document.getElementById('mainContent');
+    const wardrobeSection = document.getElementById('wardrobeSection');
+    const settingsSection = document.getElementById('settingsSection');
+    
+    // Hide everything first
+    if (gettingStarted) gettingStarted.style.display = 'none';
+    if (mainContent) mainContent.style.display = 'none';
+    if (wardrobeSection) wardrobeSection.style.display = 'none';
+    if (settingsSection) settingsSection.style.display = 'none';
+    
+    // Show requested section
+    switch(sectionName) {
+        case 'gettingStarted':
+            if (gettingStarted) gettingStarted.style.display = 'block';
+            break;
+        case 'mainContent':
+            if (mainContent) mainContent.style.display = 'flex';
+            break;
+        case 'wardrobeSection':
+            if (wardrobeSection) wardrobeSection.style.display = 'block';
+            break;
+        case 'settingsSection':
+            if (settingsSection) settingsSection.style.display = 'block';
+            break;
+    }
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function checkInitialWardrobeStatus() {
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'getAuthStatus' });
+        
+        // If user is already logged in, show wardrobe section with data
+        if (response.authenticated && response.user) {
+            console.log('User already logged in, showing wardrobe section');
+            showSection('wardrobeSection');
+        }
+    } catch (error) {
+        console.log('No existing login found, showing onboarding');
+        // User not logged in, stay on onboarding
+    }
+}
 
 // ========================================
 

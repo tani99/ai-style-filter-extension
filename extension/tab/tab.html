@@ -20,12 +20,53 @@
             </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
+        <!-- Getting Started Section -->
+        <section class="getting-started-section">
+            <h2 style="text-align: center; margin-bottom: 30px; color: #374151; font-size: 24px;">Choose Your Path</h2>
+            
+            <div class="onboarding-options">
+                <!-- Option 1: Upload Photos -->
+                <div class="onboarding-card" id="uploadPhotoCard">
+                    <div class="card-icon">📸</div>
+                    <h3>Upload Photos</h3>
+                    <p>Upload up to 5 images to get started with AI-powered style analysis</p>
+                    <ul class="feature-list">
+                        <li>✨ AI analyzes your style preferences</li>
+                        <li>🎨 Get personalized color palettes</li>
+                        <li>👗 Discover your style categories</li>
+                        <li>🛍️ Receive shopping recommendations</li>
+                    </ul>
+                    <button class="option-btn" id="chooseUploadBtn">Get Started with Photos</button>
+                </div>
+
+                <!-- Option 2: Sign In to Wardrobe -->
+                <div class="onboarding-card featured" id="wardrobeCard">
+                    <div class="featured-badge">Recommended</div>
+                    <div class="card-icon">👚</div>
+                    <h3>Fashion App Profile</h3>
+                    <p>Sign in to your Fashion App profile to use your personal wardrobe</p>
+                    <ul class="feature-list">
+                        <li>💾 Access your existing wardrobe</li>
+                        <li>🔄 Real-time sync with your app</li>
+                        <li>✨ Get outfit suggestions while shopping</li>
+                        <li>🎯 See what matches your closet</li>
+                    </ul>
+                    <button class="option-btn primary" id="chooseWardrobeBtn">Sign In to Wardrobe</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content (Hidden until option selected) -->
+        <main class="main-content" id="mainContent" style="display: none;">
             <!-- Photo Upload Section -->
             <section class="upload-section">
-                <h2>Upload Your Photos</h2>
-                <p>Upload 3-5 photos of yourself in different outfits for AI style analysis</p>
+                <div class="section-header-with-back">
+                    <button class="back-btn" id="backToOptionsBtn">← Back to Options</button>
+                    <div>
+                        <h2>Upload Your Photos</h2>
+                        <p>Upload 3-5 photos of yourself in different outfits for AI style analysis</p>
+                    </div>
+                </div>
                 
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-placeholder">
@@ -97,37 +138,166 @@
                                 <label>Upload clothing image:</label>
                                 <input type="file" id="clothingImageInput" accept="image/*">
                             </div>
-                            <button id="testTryOnBtn" class="test-tryon-btn" disabled>Generate Try-On Analysis</button>
+                            <button id="testTryOnBtn" class="test-tryon-btn" disabled>Generate Try-On Image</button>
                         </div>
                         <div id="tryonResult" class="tryon-result" style="display: none;"></div>
                     </div>
                 </div>
             </section>
 
-            <!-- Settings Section -->
-            <section class="settings-section">
-                <h2>Settings</h2>
-                <div class="settings-content">
-                    <div class="setting-item">
-                        <label>
-                            <span>Chrome AI Status:</span>
-                            <span id="aiStatus" class="status-indicator">Checking...</span>
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            <span>Filter Sensitivity:</span>
-                            <input type="range" id="sensitivitySlider" min="1" max="10" value="7">
-                            <span id="sensitivityValue">7</span>
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <button id="testAIBtn" class="test-ai-btn">Test Chrome AI</button>
-                        <div id="aiTestResult" class="ai-test-result" style="display: none;"></div>
-                    </div>
-                </div>
-            </section>
+            <!--Settings Section moved to the bottom -->
         </main>
+
+        <!-- Wardrobe Section (Separate, shown when choosing wardrobe path) -->
+        <section class="wardrobe-full-section" id="wardrobeSection" style="display: none;">
+            <div class="section-header-with-back">
+                <button class="back-btn" id="backFromWardrobeBtn">← Back to Options</button>
+                <div>
+                    <h2>Fashion App Wardrobe</h2>
+                    <p>Connect and manage your personal wardrobe</p>
+                </div>
+            </div>
+
+            <div class="wardrobe-content-wrapper">
+                <!-- Login State -->
+                <div id="wardrobeLogin" class="wardrobe-login">
+                    <p class="intro-text">Login with your wardrobe account to enable outfit suggestions</p>
+
+                    <div class="login-tabs">
+                        <button id="loginTabBtn" class="tab-btn active">Login</button>
+                        <button id="signupTabBtn" class="tab-btn">Sign Up</button>
+                    </div>
+
+                    <!-- Login Form -->
+                    <div id="loginForm" class="auth-form">
+                        <input type="email" id="loginEmail" placeholder="Email" autocomplete="email">
+                        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+                        <button id="loginBtn" class="auth-btn">Login</button>
+                    </div>
+
+                    <!-- Sign Up Form -->
+                    <div id="signupForm" class="auth-form" style="display: none;">
+                        <input type="text" id="signupName" placeholder="Display Name" autocomplete="name">
+                        <input type="email" id="signupEmail" placeholder="Email" autocomplete="email">
+                        <input type="password" id="signupPassword" placeholder="Password (min 6 characters)" autocomplete="new-password">
+                        <button id="signupBtn" class="auth-btn">Create Account</button>
+                    </div>
+
+                    <div id="authError" class="error-message" style="display: none;"></div>
+                </div>
+
+                <!-- Connected State -->
+                <div id="wardrobeConnected" class="wardrobe-connected" style="display: none;">
+                    <div class="connected-header">
+                        <div class="connected-info">
+                            <span class="status-icon">✅</span>
+                            <div class="user-info">
+                                <span id="connectedUserName" class="user-name"></span>
+                                <span id="connectedUserEmail" class="user-email"></span>
+                            </div>
+                        </div>
+                        <button id="wardrobeLogoutBtn" class="logout-btn">Logout</button>
+                    </div>
+
+                    <!-- Photo Upload & Style Profile Section FIRST -->
+                    <div class="wardrobe-photo-section" style="margin-top: 30px;">
+                        <h3>📸 Upload Your Photos</h3>
+                        <p class="intro-text">Upload 3-5 photos of yourself in different outfits for AI style analysis</p>
+                        
+                        <div class="upload-area" id="wardrobeUploadArea">
+                            <div class="upload-placeholder">
+                                <span class="upload-icon">📸</span>
+                                <p>Click to upload photos or drag & drop here</p>
+                                <small>Max 5 photos, 5MB each (JPG, PNG, WebP)</small>
+                            </div>
+                            <input type="file" id="wardrobePhotoInput" multiple accept="image/jpeg,image/jpg,image/png,image/webp" style="display: none;">
+                        </div>
+                        
+                        <div class="photo-gallery" id="wardrobePhotoGallery">
+                            <!-- Uploaded photos will appear here -->
+                        </div>
+                        
+                        <div class="photo-controls" style="margin-top: 15px;">
+                            <button id="wardrobeClearAllBtn" class="clear-btn" style="display: none;">Clear All Photos</button>
+                            <button id="wardrobeClearProfileBtn" class="clear-btn" style="display: none; margin-left: 10px;">Clear Style Profile</button>
+                        </div>
+                    </div>
+
+                    <!-- Style Analysis Section SECOND -->
+                    <div class="wardrobe-analysis-section" style="margin-top: 30px;">
+                        <h3>🎨 Your Style Profile</h3>
+                        <div class="wardrobe-analysis-content" id="wardrobeAnalysisContent">
+                            <div class="placeholder-state">
+                                <span class="placeholder-icon">🎨</span>
+                                <p>Upload photos to generate your AI-powered style profile</p>
+                                <button id="wardrobeAnalyzeBtn" class="analyze-btn" disabled>
+                                    Analyze My Style
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Wardrobe Data at BOTTOM -->
+                    <div class="wardrobe-data-section" style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #e5e7eb;">
+                        <h3 style="margin-bottom: 20px;">👚 Your Wardrobe</h3>
+                        
+                        <div class="wardrobe-stats">
+                            <div class="stat-card">
+                                <span class="stat-value" id="itemCount">0</span>
+                                <span class="stat-label">Items</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value" id="lookCount">0</span>
+                                <span class="stat-label">Looks</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-value sync-active" id="syncStatus">✅</span>
+                                <span class="stat-label">Real-time Sync</span>
+                            </div>
+                        </div>
+
+                        <div class="wardrobe-preview">
+                            <h3>Recent Items</h3>
+                            <div id="recentItemsGrid" class="items-grid">
+                                <!-- Recent items will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section class="settings-section" id="settingsSection" style="display: none;">
+            <div class="section-header-with-back">
+                <button class="back-btn" id="backFromSettingsBtn">← Back to Options</button>
+                <h2>Settings</h2>
+            </div>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label>
+                        <span>Chrome AI Status:</span>
+                        <span id="aiStatus" class="status-indicator">Checking...</span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label>
+                        <span>Filter Sensitivity:</span>
+                        <input type="range" id="sensitivitySlider" min="1" max="10" value="7">
+                        <span id="sensitivityValue">7</span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <button id="testAIBtn" class="test-ai-btn">Test Chrome AI</button>
+                    <div id="aiTestResult" class="ai-test-result" style="display: none;"></div>
+                </div>
+                <div class="setting-item">
+                    <button id="testFirebaseBtn" class="test-firebase-btn">Test Firebase Connection</button>
+                    <div id="firebaseTestResult" class="firebase-test-result" style="display: none;"></div>
+                </div>
+            </div>
+        </section>
 
         <!-- Footer -->
         <footer class="footer">
@@ -143,5 +313,8 @@
 
     <!-- Main Tab Script -->
     <script src="tab.js"></script>
+
+    <!-- Wardrobe Authentication Module -->
+    <script src="tab-wardrobe.js"></script>
 </body>
 </html>
