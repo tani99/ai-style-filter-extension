@@ -45,6 +45,9 @@ class FirestoreWardrobeManager {
 
     this.listeners.set('items', itemsListener);
 
+    // Setup real-time analysis listener for new items
+    this.setupRealtimeAnalysisListener(userId);
+
     // Listen to looks/outfits (flat structure with userId field)
     const looksListener = this.db
       .collection('looks')
@@ -72,6 +75,56 @@ class FirestoreWardrobeManager {
       );
 
     this.listeners.set('looks', looksListener);
+  }
+
+  setupRealtimeAnalysisListener(userId) {
+    console.log('🔍 Setting up real-time analysis listener for wardrobe items');
+
+    // Listen for wardrobe changes in real-time to detect new items
+    const analysisListener = this.db
+      .collection('wardrobeItems')
+      .where('userId', '==', userId)
+      .onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          if (change.type === 'added') {
+            const item = { id: change.doc.id, ...change.doc.data() };
+
+            // Check if this item needs AI analysis
+            if (!item.aiAnalysis) {
+              console.log(`[Background] New item detected without analysis: ${item.id}`);
+              await this.analyzeItemInBackground(item);
+            } else {
+              console.log(`[Background] New item already has analysis: ${item.id}`);
+            }
+          }
+        });
+      }, (error) => {
+        console.error('❌ Error in real-time analysis listener:', error);
+      });
+
+    this.listeners.set('analysis', analysisListener);
+  }
+
+  async analyzeItemInBackground(item) {
+    try {
+      console.log(`[Background] Analyzing item in background: ${item.id}`);
+
+      // Send to background script for AI analysis
+      const response = await chrome.runtime.sendMessage({
+        action: 'analyzeWardrobeItem',
+        itemId: item.id,
+        imageUrl: item.imageUrl,
+        category: item.category
+      });
+
+      if (response && response.success) {
+        console.log(`[Background] Analysis complete for ${item.id}`);
+      } else {
+        console.error(`[Background] Analysis failed for ${item.id}:`, response?.error);
+      }
+    } catch (error) {
+      console.error(`[Background] Error analyzing item ${item.id}:`, error);
+    }
   }
 
   cleanupListeners() {
