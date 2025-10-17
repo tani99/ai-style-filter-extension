@@ -2,13 +2,14 @@
 // Manages Firestore wardrobe data with real-time sync
 
 class FirestoreWardrobeManager {
-  constructor(db) {
+  constructor(db, analyzeItemCallback = null) {
     this.db = db;
     this.listeners = new Map();
     this.cache = {
       items: [],
       looks: []
     };
+    this.analyzeItemCallback = analyzeItemCallback;
   }
 
   setupListeners(userId) {
@@ -109,18 +110,12 @@ class FirestoreWardrobeManager {
     try {
       console.log(`[Background] Analyzing item in background: ${item.id}`);
 
-      // Send to background script for AI analysis
-      const response = await chrome.runtime.sendMessage({
-        action: 'analyzeWardrobeItem',
-        itemId: item.id,
-        imageUrl: item.imageUrl,
-        category: item.category
-      });
-
-      if (response && response.success) {
+      // Call the analysis function directly via callback
+      if (this.analyzeItemCallback) {
+        await this.analyzeItemCallback(item.id, item.imageUrl, item.category);
         console.log(`[Background] Analysis complete for ${item.id}`);
       } else {
-        console.error(`[Background] Analysis failed for ${item.id}:`, response?.error);
+        console.warn(`[Background] No analysis callback configured for ${item.id}`);
       }
     } catch (error) {
       console.error(`[Background] Error analyzing item ${item.id}:`, error);

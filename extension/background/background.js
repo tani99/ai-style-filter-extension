@@ -44,13 +44,22 @@ try {
   // Initialize auth manager
   authManager = new FirebaseAuthManager(auth);
 
-  // Initialize wardrobe manager
-  wardrobeManager = new FirestoreWardrobeManager(db);
+  // Initialize wardrobe manager (callback will be set after analyzeWardrobeItem is defined)
+  wardrobeManager = new FirestoreWardrobeManager(db, null);
 
   console.log('✅ Firebase initialized successfully');
   console.log('📍 Project:', firebaseConfig.projectId);
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);
+}
+
+// Set the analysis callback after analyzeWardrobeItem function is defined
+if (wardrobeManager) {
+  // We'll set this right before the analyzeWardrobeItem function definition
+  // using a wrapper that ensures the function exists
+  wardrobeManager.analyzeItemCallback = (itemId, imageUrl, category) => {
+    return analyzeWardrobeItem(itemId, imageUrl, category);
+  };
 }
 
 // Setup/cleanup Firestore listeners on auth state change
