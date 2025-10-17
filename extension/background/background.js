@@ -54,10 +54,14 @@ try {
 }
 
 // Setup/cleanup Firestore listeners on auth state change
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async (user) => {
   if (user && wardrobeManager) {
     console.log('👤 User authenticated, setting up Firestore listeners');
     wardrobeManager.setupListeners(user.uid);
+
+    // Trigger wardrobe analysis on login
+    console.log('[Background] User logged in, starting wardrobe analysis...');
+    await analyzeAllWardrobeItems(user.uid);
   } else if (wardrobeManager) {
     console.log('👤 User logged out, cleaning up Firestore listeners');
     wardrobeManager.cleanupListeners();
@@ -396,6 +400,53 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }
     }
 });
+
+// Wardrobe Analysis Functions
+
+// Analyze all wardrobe items that don't have AI analysis
+async function analyzeAllWardrobeItems(userId) {
+  try {
+    if (!db || !userId) {
+      console.error('[Background] Cannot analyze wardrobe: missing db or userId');
+      return;
+    }
+
+    console.log('[Background] Fetching wardrobe items for analysis...');
+
+    // Get all wardrobe items from Firestore
+    const wardrobeSnapshot = await db.collection('wardrobeItems')
+      .where('userId', '==', userId)
+      .get();
+
+    const itemsNeedingAnalysis = [];
+    wardrobeSnapshot.forEach(doc => {
+      const item = doc.data();
+      if (!item.aiAnalysis) {
+        itemsNeedingAnalysis.push({
+          id: doc.id,
+          ...item
+        });
+      }
+    });
+
+    console.log(`[Background] Found ${itemsNeedingAnalysis.length} items needing analysis out of ${wardrobeSnapshot.size} total items`);
+
+    if (itemsNeedingAnalysis.length === 0) {
+      console.log('[Background] All wardrobe items already analyzed');
+      return;
+    }
+
+    // Analyze items one by one (rate limiting built in)
+    for (const item of itemsNeedingAnalysis) {
+      console.log(`[Background] Analyzing item ${item.id}...`);
+      await analyzeWardrobeItem(item.id, item.imageUrl, item.category);
+    }
+
+    console.log('[Background] All wardrobe items analyzed successfully');
+  } catch (error) {
+    console.error('[Background] Error analyzing all wardrobe items:', error);
+  }
+}
 
 // AI Utility Functions
 
