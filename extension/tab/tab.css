@@ -1131,7 +1131,6 @@ input[type="range"] {
 }
 
 .wardrobe-item-card {
-    aspect-ratio: 1;
     border-radius: 8px;
     overflow: hidden;
     border: 2px solid #e5e7eb;
@@ -1139,33 +1138,99 @@ input[type="range"] {
     cursor: pointer;
     display: flex;
     flex-direction: column;
+    background: white;
 }
 
 .wardrobe-item-card:hover {
-    transform: scale(1.05);
+    transform: scale(1.02);
     border-color: #667eea;
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
 }
 
 .wardrobe-item-card img {
     width: 100%;
-    height: 80%;
+    height: 120px;
     object-fit: cover;
 }
 
 .item-name {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    color: #6b7280;
-    padding: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1f2937;
+    padding: 8px 4px 4px 4px;
     text-align: center;
     background: white;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* AI Analysis Display */
+.item-analysis {
+    padding: 8px;
+    background: #f9fafb;
+    font-size: 11px;
+    line-height: 1.3;
+    border-top: 1px solid #e5e7eb;
+}
+
+.analysis-header {
+    font-weight: 600;
+    color: #667eea;
+    margin-bottom: 6px;
+    font-size: 11px;
+}
+
+.analysis-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.analysis-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.analysis-row strong {
+    color: #374151;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.analysis-value {
+    color: #6b7280;
+    font-size: 10px;
+}
+
+.analysis-row.description {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.analysis-row.description p {
+    color: #4b5563;
+    font-size: 10px;
+    font-style: italic;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.item-analysis.no-analysis {
+    text-align: center;
+    padding: 12px 8px;
+    background: #fef3c7;
+}
+
+.analysis-pending {
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 500;
 }
 
 /* Test Firebase Button */
