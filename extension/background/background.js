@@ -515,30 +515,79 @@ async function analyzeWardrobeItem(itemId, imageUrl, category) {
     // STEP 2: No analysis found, make AI call
     console.log(`[Background] No existing analysis for ${itemId}, analyzing now...`);
 
-    const prompt = `You are a fashion expert analyzing a clothing item for outfit matching purposes.
+    // NOTE: Chrome AI cannot fetch or view images from URLs. The analysis is based on
+    // the category field provided by the user. This is a limitation we need to address
+    // by either: 1) Using a vision API like Gemini, or 2) Having users provide descriptions
 
-IMAGE URL: ${imageUrl || 'Not provided'}
-CATEGORY: ${category || 'Unknown'}
+    const prompt = `You are a fashion expert analyzing a clothing item for outfit matching.
 
-TASK: Analyze this clothing item and provide attributes that will help match it with other wardrobe items to create complete outfits.
+CATEGORY PROVIDED BY USER: ${category || 'Unknown'}
 
-RESPOND WITH ONLY valid JSON in this exact format:
+CRITICAL INSTRUCTIONS:
+1. FIRST, determine if the category represents an actual clothing/fashion item
+2. If it's NOT a clothing item (e.g., "cat", "pet", "animal", "food", "object"), respond with:
+   {
+     "is_clothing": false,
+     "error": "Not a clothing item",
+     "description": "This item is not a clothing or fashion item"
+   }
+3. If it IS a clothing item, provide detailed fashion analysis
+
+For CLOTHING ITEMS ONLY, respond with this JSON format:
 {
-  "colors": ["primary color", "secondary color"],
-  "style": ["casual", "formal", "sporty", "bohemian", "minimalist"],
-  "pattern": "solid/striped/floral/plaid/geometric/printed",
-  "formality": "casual/business casual/formal/athletic",
+  "is_clothing": true,
+  "colors": ["specific color name", "specific color name"],
+  "style": ["casual", "formal", "sporty", "bohemian", "minimalist", "streetwear", "preppy"],
+  "pattern": "solid|striped|floral|plaid|geometric|printed|textured|embroidered",
+  "formality": "casual|business casual|semi-formal|formal|athletic",
   "season": ["spring", "summer", "fall", "winter"],
-  "versatility_score": 8,
-  "description": "Brief 1-2 sentence description of the item"
+  "versatility_score": 7,
+  "description": "Accurate 1-2 sentence description based ONLY on the category ${category}"
 }
 
-IMPORTANT:
-- colors array should contain 1-3 dominant colors (use specific color names like "navy blue", "burgundy", "cream")
-- style array can have multiple matching styles
-- versatility_score is 1-10, where 10 means extremely versatile
-- Keep description concise and focused on visual characteristics
-- Ensure the response is valid JSON only, no additional text`;
+RULES FOR ACCURATE ANALYSIS:
+- Use SPECIFIC color names based on the category (e.g., "white dress" → ["white"], "blue jeans" → ["blue", "denim"])
+- Extract colors directly from the category name when mentioned
+- Be realistic about the item type (shoes are shoes, not "casual bohemian minimalist")
+- Versatility score should reflect how many outfits this item can be part of
+- Description MUST match the category - don't make up details not in the category
+- If category is vague (like "undefined"), use generic neutral analysis
+
+EXAMPLES:
+Category: "White T-Shirt"
+{
+  "is_clothing": true,
+  "colors": ["white"],
+  "style": ["casual", "minimalist"],
+  "pattern": "solid",
+  "formality": "casual",
+  "season": ["spring", "summer", "fall", "winter"],
+  "versatility_score": 10,
+  "description": "A white t-shirt that pairs easily with any bottom"
+}
+
+Category: "Black Leather Jacket"
+{
+  "is_clothing": true,
+  "colors": ["black"],
+  "style": ["casual", "streetwear"],
+  "pattern": "solid",
+  "formality": "casual",
+  "season": ["fall", "winter", "spring"],
+  "versatility_score": 8,
+  "description": "A black leather jacket suitable for layering in cooler weather"
+}
+
+Category: "Cat" or "undefined" (if image shows a cat)
+{
+  "is_clothing": false,
+  "error": "Not a clothing item",
+  "description": "This appears to be a pet/animal, not a clothing item"
+}
+
+Now analyze: "${category || 'undefined'}"
+
+Respond with ONLY valid JSON, no markdown or extra text.`;
 
     const aiResult = await executeAIPrompt(prompt, {
       temperature: 0.7,
@@ -563,20 +612,42 @@ IMPORTANT:
         .replace(/```\n?/g, '')
         .trim();
 
-      analysis = JSON.parse(cleanedResponse);
+      const parsed = JSON.parse(cleanedResponse);
 
-      // Validate required fields
-      if (!analysis.colors || !analysis.style || !analysis.pattern) {
-        throw new Error('Missing required fields in AI response');
+      // Check if this is actually a clothing item
+      if (parsed.is_clothing === false) {
+        console.warn(`[Background] Item ${itemId} is NOT a clothing item: ${parsed.description}`);
+        analysis = {
+          is_clothing: false,
+          error: parsed.error || 'Not a clothing item',
+          colors: ['n/a'],
+          style: ['n/a'],
+          pattern: 'n/a',
+          formality: 'n/a',
+          season: [],
+          versatility_score: 0,
+          description: parsed.description || 'This is not a clothing or fashion item'
+        };
+      } else {
+        // Validate required fields for clothing items
+        if (!parsed.colors || !parsed.style || !parsed.pattern) {
+          throw new Error('Missing required fields in AI response');
+        }
+
+        analysis = {
+          is_clothing: true,
+          ...parsed
+        };
       }
 
-      console.log(`[Background] Successfully parsed analysis for ${itemId}`);
+      console.log(`[Background] Successfully parsed analysis for ${itemId}:`, analysis);
     } catch (parseError) {
       console.error(`[Background] Failed to parse AI response for ${itemId}:`, parseError);
       console.error('Raw AI response:', aiResult.response);
 
       // Provide fallback analysis
       analysis = {
+        is_clothing: true,
         colors: ['unknown'],
         style: ['casual'],
         pattern: 'unknown',
