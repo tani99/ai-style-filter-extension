@@ -73,7 +73,7 @@ importScripts('/gemini/GeminiAPIManager.js');
 const geminiManager = new GeminiAPIManager();
 
 // Handle extension installation
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
     console.log('AI Style Filter extension installed/updated', details.reason);
 
     if (details.reason === 'install') {
@@ -84,6 +84,33 @@ chrome.runtime.onInstalled.addListener((details) => {
             'userPhotos': [],
             'tryOnCache': {}
         });
+    }
+
+    // Trigger wardrobe analysis on installation/update if user is logged in
+    if (authManager) {
+        const user = authManager.getCurrentUser();
+        if (user) {
+            console.log('[Background] Extension installed/updated, checking wardrobe...');
+            await analyzeAllWardrobeItems(user.uid);
+        }
+    }
+});
+
+// Handle extension startup (when Chrome starts with extension already installed)
+chrome.runtime.onStartup.addListener(async () => {
+    console.log('[Background] Extension started, checking for logged-in user...');
+
+    // Wait a bit for auth to initialize
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    if (authManager) {
+        const user = authManager.getCurrentUser();
+        if (user) {
+            console.log('[Background] User is logged in, checking wardrobe...');
+            await analyzeAllWardrobeItems(user.uid);
+        } else {
+            console.log('[Background] No user logged in on startup');
+        }
     }
 });
 
