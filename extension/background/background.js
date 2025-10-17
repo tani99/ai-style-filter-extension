@@ -287,6 +287,44 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true; // Keep message channel open for async response
 
+        case 'clearAllAIAnalysis':
+            if (authManager && db) {
+                const user = authManager.getCurrentUser();
+                if (user) {
+                    clearAllAIAnalysis(user.uid)
+                        .then(result => sendResponse(result))
+                        .catch(error => sendResponse({ success: false, error: error.message }));
+                } else {
+                    sendResponse({ success: false, error: 'Not authenticated' });
+                }
+            } else {
+                sendResponse({ success: false, error: 'Firebase not initialized' });
+            }
+            return true;
+
+        case 'reanalyzeAllItems':
+            if (authManager && db) {
+                const user = authManager.getCurrentUser();
+                if (user) {
+                    analyzeAllWardrobeItems(user.uid)
+                        .then(() => {
+                            // Get item count
+                            db.collection('wardrobeItems')
+                                .where('userId', '==', user.uid)
+                                .get()
+                                .then(snapshot => {
+                                    sendResponse({ success: true, itemCount: snapshot.size });
+                                });
+                        })
+                        .catch(error => sendResponse({ success: false, error: error.message }));
+                } else {
+                    sendResponse({ success: false, error: 'Not authenticated' });
+                }
+            } else {
+                sendResponse({ success: false, error: 'Firebase not initialized' });
+            }
+            return true;
+
         default:
             console.log('Unknown action:', request.action);
     }
@@ -444,6 +482,52 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // Wardrobe Analysis Functions
+
+// Clear all AI analysis data from Firestore
+async function clearAllAIAnalysis(userId) {
+  try {
+    if (!db || !userId) {
+      throw new Error('Missing required parameters: db or userId');
+    }
+
+    console.log('[Background] Clearing all AI analysis for user:', userId);
+
+    // Get all wardrobe items
+    const wardrobeSnapshot = await db.collection('wardrobeItems')
+      .where('userId', '==', userId)
+      .get();
+
+    console.log(`[Background] Found ${wardrobeSnapshot.size} items to clear`);
+
+    // Batch update to remove aiAnalysis field
+    const batch = db.batch();
+    let updateCount = 0;
+
+    wardrobeSnapshot.forEach(doc => {
+      const docRef = db.collection('wardrobeItems').doc(doc.id);
+      batch.update(docRef, {
+        aiAnalysis: firebase.firestore.FieldValue.delete(),
+        aiAnalyzedAt: firebase.firestore.FieldValue.delete()
+      });
+      updateCount++;
+    });
+
+    // Commit the batch
+    await batch.commit();
+
+    console.log(`[Background] Successfully cleared AI analysis for ${updateCount} items`);
+
+    return {
+      success: true,
+      clearedCount: updateCount,
+      message: `Cleared analysis for ${updateCount} items`
+    };
+
+  } catch (error) {
+    console.error('[Background] Error clearing AI analysis:', error);
+    throw error;
+  }
+}
 
 // Analyze all wardrobe items that don't have AI analysis
 async function analyzeAllWardrobeItems(userId) {

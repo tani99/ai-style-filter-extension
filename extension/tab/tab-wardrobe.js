@@ -1169,6 +1169,124 @@ function createFallbackProfile(rawResponse) {
   };
 }
 
+// Refresh AI Analysis Button Handler
+document.getElementById('refreshAnalysisBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('refreshAnalysisBtn');
+  const progressDiv = document.getElementById('analysisProgress');
+  const progressTitle = document.getElementById('progressTitle');
+  const progressMessage = document.getElementById('progressMessage');
+  const progressCount = document.getElementById('progressCount');
+
+  // Check if user is logged in
+  try {
+    const authResponse = await chrome.runtime.sendMessage({ action: 'getAuthStatus' });
+    if (!authResponse.authenticated) {
+      alert('Please log in first to refresh AI analysis');
+      return;
+    }
+
+    // Confirm action
+    const confirmed = confirm(
+      'This will clear all existing AI analysis and re-analyze all wardrobe items.\n\n' +
+      'This process may take a few minutes depending on the number of items.\n\n' +
+      'Continue?'
+    );
+
+    if (!confirmed) return;
+
+    // Disable button and show progress
+    btn.disabled = true;
+    btn.textContent = '⏳ Processing...';
+    progressDiv.style.display = 'block';
+    progressTitle.textContent = 'Refreshing AI Analysis...';
+    progressMessage.textContent = 'Clearing existing analysis...';
+    progressCount.textContent = '';
+
+    // Step 1: Clear all existing AI analysis
+    console.log('🧹 Clearing existing AI analysis...');
+    const clearResponse = await chrome.runtime.sendMessage({
+      action: 'clearAllAIAnalysis'
+    });
+
+    if (!clearResponse.success) {
+      throw new Error(clearResponse.error || 'Failed to clear analysis');
+    }
+
+    console.log(`✅ Cleared analysis for ${clearResponse.clearedCount} items`);
+    progressMessage.textContent = `Cleared ${clearResponse.clearedCount} items. Starting fresh analysis...`;
+
+    // Step 2: Trigger re-analysis
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Brief pause
+    progressMessage.textContent = 'Analyzing all wardrobe items...';
+
+    const analyzeResponse = await chrome.runtime.sendMessage({
+      action: 're analyzeAllItems'
+    });
+
+    if (!analyzeResponse.success) {
+      throw new Error(analyzeResponse.error || 'Failed to start analysis');
+    }
+
+    console.log(`🔄 Started analysis for ${analyzeResponse.itemCount} items`);
+
+    // Poll for progress
+    let analysisComplete = false;
+    let pollCount = 0;
+    const maxPolls = 120; // 2 minutes max
+
+    while (!analysisComplete && pollCount < maxPolls) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      pollCount++;
+
+      // Reload wardrobe data to check progress
+      const wardrobeResponse = await chrome.runtime.sendMessage({
+        action: 'getCachedWardrobe'
+      });
+
+      if (wardrobeResponse.success) {
+        const items = wardrobeResponse.data.items;
+        const analyzedCount = items.filter(item => item.aiAnalysis).length;
+        const totalCount = items.length;
+
+        progressCount.textContent = `Progress: ${analyzedCount} / ${totalCount} items analyzed`;
+
+        if (analyzedCount === totalCount) {
+          analysisComplete = true;
+        }
+      }
+    }
+
+    if (analysisComplete) {
+      progressTitle.textContent = '✅ Analysis Complete!';
+      progressMessage.textContent = 'All items have been analyzed successfully.';
+      progressCount.textContent = '';
+
+      // Reload the display
+      await loadWardrobeData();
+
+      // Hide progress after 3 seconds
+      setTimeout(() => {
+        progressDiv.style.display = 'none';
+      }, 3000);
+    } else {
+      progressTitle.textContent = '⏳ Analysis In Progress';
+      progressMessage.textContent = 'Analysis is taking longer than expected. It will continue in the background.';
+
+      setTimeout(() => {
+        progressDiv.style.display = 'none';
+      }, 5000);
+    }
+
+  } catch (error) {
+    console.error('❌ Refresh analysis failed:', error);
+    alert(`Failed to refresh analysis: ${error.message}`);
+    progressDiv.style.display = 'none';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Refresh AI Analysis';
+  }
+});
+
 // Initialize wardrobe photo upload on page load
 loadWardrobeSavedPhotos();
 loadWardrobeSavedStyleProfile();

@@ -239,8 +239,15 @@
 
                     <!-- Wardrobe Data at BOTTOM -->
                     <div class="wardrobe-data-section" style="margin-top: 40px; padding-top: 30px; border-top: 2px solid #e5e7eb;">
-                        <h3 style="margin-bottom: 20px;">👚 Your Wardrobe</h3>
-                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0;">👚 Your Wardrobe</h3>
+                            <div class="wardrobe-actions">
+                                <button id="refreshAnalysisBtn" class="refresh-analysis-btn">
+                                    🔄 Refresh AI Analysis
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="wardrobe-stats">
                             <div class="stat-card">
                                 <span class="stat-value" id="itemCount">0</span>
@@ -260,6 +267,17 @@
                             <h3>Recent Items</h3>
                             <div id="recentItemsGrid" class="items-grid">
                                 <!-- Recent items will be displayed here -->
+                            </div>
+                        </div>
+
+                        <div id="analysisProgress" class="analysis-progress" style="display: none;">
+                            <div class="progress-content">
+                                <div class="progress-spinner"></div>
+                                <div class="progress-text">
+                                    <strong id="progressTitle">Refreshing AI Analysis...</strong>
+                                    <p id="progressMessage">Analyzing items...</p>
+                                    <p id="progressCount" class="progress-count"></p>
+                                </div>
                             </div>
                         </div>
                     </div>
