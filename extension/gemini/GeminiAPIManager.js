@@ -3,13 +3,18 @@
 // Separated from Chrome AI Prompt API functionality
 
 // Gemini API Configuration
-// Following official documentation: https://ai.google.dev/gemini-api/docs/quickstart
+// Following official documentation: https://ai.google.dev/gemini-api/docs/image-generation
 // Using v1beta as per docs, with x-goog-api-key header authentication
 const GEMINI_API_TEST_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash';
-const GEMINI_IMAGE_GENERATION_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview';
 
-// Note: Gemini 2.5 Flash Image Preview supports both text AND image generation
-// This model can generate actual virtual try-on images, not just text analysis
+// Available image generation models:
+// - gemini-2.5-flash-image: Production model for image generation (CORRECT ONE)
+// - gemini-2.0-flash-exp: Does NOT support image generation, only multimodal understanding
+// - imagen-4.0-flash-preview-0827: Imagen 4 Fast for high-quality image generation
+const GEMINI_IMAGE_GENERATION_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image';
+
+// Note: Using gemini-2.5-flash-image as confirmed by Google AI Studio
+// This is the ONLY Gemini model that generates images
 
 class GeminiAPIManager {
     constructor() {
@@ -142,23 +147,22 @@ class GeminiAPIManager {
                 throw new Error('Gemini API key not configured. Please add your API key in settings.');
             }
 
-            // Check cache first
-            const cacheKey = this.generateCacheKey(userPhoto, clothingImage);
-            const cachedResult = await this.getCachedTryOn(cacheKey);
+            // ALWAYS generate fresh images - no caching
+            console.log('🔄 Generating fresh try-on image (caching disabled)');
 
-            if (cachedResult) {
-                console.log('✅ Returning cached try-on image');
-                return {
-                    success: true,
-                    imageUrl: cachedResult,
-                    cached: true,
-                    message: 'Try-on image retrieved from cache'
-                };
-            }
+            // NOTE: Caching is intentionally disabled to ensure fresh generation every time
+            // This guarantees unique results for each request
 
             // Prepare images for API (ensure base64 format)
-            const userPhotoBase64 = this.cleanBase64Image(userPhoto);
-            const clothingImageBase64 = this.cleanBase64Image(clothingImage);
+            const userPhotoData = this.cleanBase64Image(userPhoto);
+            const clothingImageData = this.cleanBase64Image(clothingImage);
+
+            // Detect MIME types from data URLs or default to jpeg
+            const userPhotoMimeType = this.detectMimeType(userPhoto);
+            const clothingImageMimeType = this.detectMimeType(clothingImage);
+
+            console.log('🖼️ User photo MIME type:', userPhotoMimeType);
+            console.log('🖼️ Clothing image MIME type:', clothingImageMimeType);
 
             // Create prompt for virtual try-on IMAGE GENERATION
             const prompt = this.createImageGenerationPrompt(options);
@@ -171,37 +175,43 @@ class GeminiAPIManager {
                 contents: [{
                     parts: [
                         {
+                            inline_data: {
+                                mime_type: userPhotoMimeType,
+                                data: userPhotoData
+                            }
+                        },
+                        {
+                            inline_data: {
+                                mime_type: clothingImageMimeType,
+                                data: clothingImageData
+                            }
+                        },
+                        {
                             text: prompt
-                        },
-                        {
-                            inline_data: {
-                                mime_type: 'image/jpeg',
-                                data: userPhotoBase64
-                            }
-                        },
-                        {
-                            inline_data: {
-                                mime_type: 'image/jpeg',
-                                data: clothingImageBase64
-                            }
                         }
                     ]
                 }],
                 generationConfig: {
-                    temperature: options.temperature || 0.4,
+                    responseModalities: ["Image"],  // CRITICAL: Request image output!
+                    imageConfig: {
+                        aspectRatio: "3:4"  // Portrait aspect ratio for fashion photos
+                    },
+                    temperature: 1.0,
                     topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 8192
+                    topP: 0.95
                 }
             };
 
             console.log('📤 Sending request to Gemini API...');
-            console.log('🔍 URL:', url);
+            console.log('🔍 MODEL:', url.split('/').pop().split(':')[0]);
+            console.log('🔍 FULL URL:', url);
+            console.log('🔍 Prompt:', prompt);
             console.log('🔍 Request body structure:', {
                 contentsLength: requestBody.contents.length,
                 partsLength: requestBody.contents[0].parts.length,
                 partTypes: requestBody.contents[0].parts.map(p => p.text ? 'text' : 'image'),
-                config: requestBody.generationConfig
+                config: requestBody.generationConfig,
+                imagesSizes: [userPhotoData.length, clothingImageData.length]
             });
 
             const response = await fetch(url, {
@@ -222,11 +232,40 @@ class GeminiAPIManager {
 
             const data = await response.json();
             console.log('📥 Received response from Gemini API');
-            
+
             // DEBUG: Log the full response structure
             console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
+
+            // Check for safety/content filters or blocks
+            if (data.promptFeedback) {
+                console.log('⚠️ Prompt Feedback:', data.promptFeedback);
+                if (data.promptFeedback.blockReason) {
+                    throw new Error(`Content blocked by Gemini: ${data.promptFeedback.blockReason}. Safety ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)}`);
+                }
+            }
+
+            // Check for candidates
+            if (!data.candidates || data.candidates.length === 0) {
+                console.error('❌ No candidates in response. Full data:', JSON.stringify(data, null, 2));
+                throw new Error(`No candidates returned from Gemini API. This might mean: content was blocked, or the model couldn't generate an image. Full response: ${JSON.stringify(data)}`);
+            }
+
             console.log('🔍 Candidates:', data.candidates);
             console.log('🔍 First Candidate:', data.candidates?.[0]);
+
+            // Check finish reason
+            const finishReason = data.candidates?.[0]?.finishReason;
+            if (finishReason && finishReason !== 'STOP') {
+                console.warn('⚠️ Unusual finish reason:', finishReason);
+                if (finishReason === 'SAFETY') {
+                    throw new Error(`Content generation stopped due to safety filters. Finish reason: ${finishReason}. Safety ratings: ${JSON.stringify(data.candidates[0].safetyRatings)}`);
+                } else if (finishReason === 'RECITATION') {
+                    throw new Error('Content generation stopped due to recitation concerns.');
+                } else {
+                    console.warn(`Generation finished with reason: ${finishReason}`);
+                }
+            }
+
             console.log('🔍 Content:', data.candidates?.[0]?.content);
             console.log('🔍 Parts:', data.candidates?.[0]?.content?.parts);
 
@@ -234,8 +273,8 @@ class GeminiAPIManager {
             const parts = data.candidates?.[0]?.content?.parts;
 
             if (!parts || parts.length === 0) {
-                console.error('❌ No parts found in response. Full data:', data);
-                throw new Error('No response from Gemini API');
+                console.error('❌ No parts found in response. Full data:', JSON.stringify(data, null, 2));
+                throw new Error(`No content parts in Gemini response. Full candidate: ${JSON.stringify(data.candidates?.[0])}`);
             }
 
             console.log(`🔍 Found ${parts.length} parts in response`);
@@ -275,10 +314,30 @@ class GeminiAPIManager {
             };
 
             if (generatedImageBase64) {
-                // Convert to data URL for easy display
-                result_data.imageUrl = `data:image/jpeg;base64,${generatedImageBase64}`;
+                // Verify this is NOT the same as input images
+                const isSameAsUserPhoto = generatedImageBase64 === userPhotoData;
+                const isSameAsClothing = generatedImageBase64 === clothingImageData;
+
+                if (isSameAsUserPhoto) {
+                    console.error('❌ Generated image is identical to user photo!');
+                    throw new Error('Gemini API returned the input user photo instead of generating a new image. This is not a valid try-on result.');
+                }
+
+                if (isSameAsClothing) {
+                    console.error('❌ Generated image is identical to clothing image!');
+                    throw new Error('Gemini API returned the input clothing image instead of generating a new image. This is not a valid try-on result.');
+                }
+
+                // Get the actual MIME type from the response (might be PNG, not JPEG)
+                const responseMimeType = parts[0].inlineData?.mimeType || parts[0].inline_data?.mime_type || 'image/png';
+                console.log('🔍 Generated image MIME type:', responseMimeType);
+
+                // Convert to data URL with correct MIME type
+                result_data.imageUrl = `data:${responseMimeType};base64,${generatedImageBase64}`;
                 result_data.imageBase64 = generatedImageBase64;
+                result_data.mimeType = responseMimeType;
                 console.log('🎨 Virtual try-on image generated successfully');
+                console.log('✅ Verified: Generated image is different from both input images');
             }
 
             if (responseText) {
@@ -289,8 +348,8 @@ class GeminiAPIManager {
                 throw new Error('No image or text response from Gemini API');
             }
 
-            // Cache the result
-            await this.cacheTryOnResult(cacheKey, result_data);
+            // NOTE: Caching disabled - always generate fresh images
+            // await this.cacheTryOnResult(cacheKey, result_data);
 
             return result_data;
 
@@ -305,18 +364,16 @@ class GeminiAPIManager {
     }
 
     // Create prompt for image generation virtual try-on
+    // Following Gemini API docs: "Describe the scene, don't just list keywords"
     createImageGenerationPrompt(options = {}) {
-        return `Generate a realistic virtual try-on image showing the person from the first image wearing the clothing item from the second image.
+        return `The first image is an image of me. generate an image of me wearing the clothing item in the second image`
+//         `Create a photorealistic fashion photograph showing the person from the first image wearing the clothing item from the second image.
 
-Requirements:
-- Create a photorealistic image of the person wearing the clothing item
-- Maintain the person's facial features, body proportions, and skin tone exactly as shown
-- Accurately place the clothing item on the person with proper fit and draping
-- Ensure the clothing color, pattern, and style match the product image exactly
-- Keep natural lighting and a clean background
-- Make it look like a professional fashion photograph
+// The person should be positioned in a natural, flattering pose against a clean, neutral background. Their facial features, skin tone, hair, and body proportions must remain exactly as shown in the first image.
 
-The output should be a single high-quality image showing the person wearing the clothing item.`;
+// Take the clothing item from the second image and place it on the person with realistic fit and draping that matches their body type. The clothing's color, pattern, texture, and style details must be preserved exactly as they appear in the second image. Ensure the garment sits naturally on the body with appropriate wrinkles, shadows, and fabric behavior.
+
+// The lighting should be soft and even, similar to professional studio photography, creating natural shadows that enhance the three-dimensional quality of both the person and the clothing. The overall composition should look like a high-quality fashion e-commerce product photo, where you can clearly see how the clothing item looks when worn by this specific person.`;
     }
 
     // Create prompt for virtual try-on analysis (text-based)
@@ -356,6 +413,24 @@ Please provide a detailed but concise analysis in JSON format:
   "styling_suggestions": ["suggestion1", "suggestion2", "suggestion3"],
   "overall_recommendation": "recommendation text"
 }`;
+    }
+
+    // Helper function to detect MIME type from data URL
+    detectMimeType(imageData) {
+        if (!imageData) {
+            return 'image/jpeg'; // default
+        }
+
+        // Check if it's a data URL with MIME type
+        if (imageData.startsWith('data:')) {
+            const mimeMatch = imageData.match(/^data:([^;,]+)/);
+            if (mimeMatch && mimeMatch[1]) {
+                return mimeMatch[1];
+            }
+        }
+
+        // Default to JPEG if we can't detect
+        return 'image/jpeg';
     }
 
     // Helper function to clean base64 image data

@@ -238,10 +238,14 @@ function displayRecentItems(items) {
           <div class="item-analysis">
             <div class="analysis-header">🤖 AI Analysis</div>
             <div class="analysis-details">
-              ${item.aiAnalysis.colors && item.aiAnalysis.colors.length > 0 ? `
+              ${item.aiAnalysis.colors && typeof item.aiAnalysis.colors === 'object' ? `
                 <div class="analysis-row">
                   <strong>Colors:</strong>
-                  <span class="analysis-value">${item.aiAnalysis.colors.join(', ')}</span>
+                  <span class="analysis-value">
+                    ${item.aiAnalysis.colors.primary || 'unknown'}
+                    ${item.aiAnalysis.colors.secondary ? `, ${item.aiAnalysis.colors.secondary}` : ''}
+                    ${item.aiAnalysis.colors.tertiary ? `, ${item.aiAnalysis.colors.tertiary}` : ''}
+                  </span>
                 </div>
               ` : ''}
 
@@ -779,25 +783,29 @@ async function analyzeWardrobeStyle() {
 
 async function performMultiPhotoStyleAnalysis(photos) {
   try {
-    console.log('Performing multi-photo style analysis...');
-    
-    // Create comprehensive style analysis prompt
-    const stylePrompt = createStyleAnalysisPrompt(photos);
-    
-    // Send to background script for AI processing
+    console.log('Performing multi-photo style analysis with actual images...');
+    console.log(`Analyzing ${photos.length} photos`);
+
+    // Convert photo data URLs to image URLs that can be fetched
+    const photoUrls = photos.map(photo => photo.data);
+
+    console.log(`Successfully prepared ${photoUrls.length} photo data URLs for analysis`);
+
+    // Send to background script for AI processing with images
     const response = await chrome.runtime.sendMessage({
-      action: 'aiPrompt',
-      prompt: stylePrompt,
+      action: 'aiStyleProfileWithImages',
+      photoDataUrls: photoUrls,
+      photoCount: photos.length,
       options: {
         temperature: 0.7,
         maxRetries: 3
       }
     });
-    
+
     if (response.success) {
       // Parse the AI response into structured data
       const profileData = parseStyleAnalysisResponse(response.response);
-      
+
       return {
         success: true,
         profile: profileData,
@@ -809,7 +817,7 @@ async function performMultiPhotoStyleAnalysis(photos) {
         error: response.error || 'AI analysis failed'
       };
     }
-    
+
   } catch (error) {
     console.error('Multi-photo analysis error:', error);
     return {
@@ -1220,7 +1228,7 @@ document.getElementById('refreshAnalysisBtn')?.addEventListener('click', async (
     progressMessage.textContent = 'Analyzing all wardrobe items...';
 
     const analyzeResponse = await chrome.runtime.sendMessage({
-      action: 're analyzeAllItems'
+      action: 'reanalyzeAllItems'
     });
 
     if (!analyzeResponse.success) {

@@ -409,25 +409,29 @@ async function clearStyleProfile() {
 
 async function performMultiPhotoStyleAnalysis(photos) {
     try {
-        console.log('Performing multi-photo style analysis...');
-        
-        // Create comprehensive style analysis prompt
-        const stylePrompt = createStyleAnalysisPrompt(photos);
-        
-        // Send to background script for AI processing
+        console.log('Performing multi-photo style analysis with actual images...');
+        console.log(`Analyzing ${photos.length} photos`);
+
+        // Convert photo data URLs to image URLs that can be fetched
+        const photoUrls = photos.map(photo => photo.data);
+
+        console.log(`Successfully prepared ${photoUrls.length} photo data URLs for analysis`);
+
+        // Send to background script for AI processing with images
         const response = await chrome.runtime.sendMessage({
-            action: 'aiPrompt',
-            prompt: stylePrompt,
+            action: 'aiStyleProfileWithImages',
+            photoDataUrls: photoUrls,
+            photoCount: photos.length,
             options: {
                 temperature: 0.7,
                 maxRetries: 3
             }
         });
-        
+
         if (response.success) {
             // Parse the AI response into structured data
             const profileData = parseStyleAnalysisResponse(response.response);
-            
+
             return {
                 success: true,
                 profile: profileData,
@@ -439,7 +443,7 @@ async function performMultiPhotoStyleAnalysis(photos) {
                 error: response.error || 'AI analysis failed'
             };
         }
-        
+
     } catch (error) {
         console.error('Multi-photo analysis error:', error);
         return {
@@ -451,15 +455,16 @@ async function performMultiPhotoStyleAnalysis(photos) {
 
 function createStyleAnalysisPrompt(photos) {
     const photoCount = photos.length;
-    const photoDescriptions = photos.map((photo, index) => 
-        `Photo ${index + 1}: ${photo.name} (uploaded ${new Date(photo.timestamp).toLocaleDateString()})`
-    ).join('\n');
-    
-    return `You are an expert fashion stylist and personal style consultant. I have uploaded ${photoCount} photos of myself in different outfits. Please analyze these photos and create a comprehensive personal style profile.
 
-IMPORTANT: Respond with ONLY a valid JSON object in the exact format specified below. Do not include any markdown formatting, explanations, or text outside the JSON.
+    return `You are an expert fashion stylist and personal style consultant. I have uploaded ${photoCount} photos showing different outfits. Please analyze the ACTUAL IMAGES provided and create a comprehensive personal style profile based on what you SEE.
 
-Based on the photos, analyze and provide:
+IMPORTANT INSTRUCTIONS:
+1. Look carefully at each image and analyze the clothing, colors, patterns, and overall style visible in the photos
+2. Base your analysis on the VISUAL CONTENT of the images, not assumptions
+3. Identify specific colors, patterns, silhouettes, and style elements you can see
+4. Respond with ONLY a valid JSON object in the exact format specified below. Do not include any markdown formatting, explanations, or text outside the JSON.
+
+Based on analyzing the ${photoCount} images provided, create a detailed style profile:
 
 {
   "analysis_summary": "Brief overview of the style analysis",

@@ -325,6 +325,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
             return true;
 
+        case 'aiStyleProfileWithImages':
+            analyzeStyleProfileWithImages(request.photoDataUrls, request.photoCount, request.options)
+                .then(result => sendResponse(result))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+
+        case 'filterWardrobeItems':
+            filterWardrobeItemsByAttributes(request.product, request.wardrobeItems)
+                .then(result => sendResponse(result))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+
+        case 'composeOutfitVisual':
+            composeOutfitVisual(request.product, request.shortlistedItems)
+                .then(result => sendResponse(result))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+
         default:
             console.log('Unknown action:', request.action);
     }
@@ -483,6 +501,121 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 // Wardrobe Analysis Functions
 
+// Analyze multiple photos for style profile generation with actual image inputs
+async function analyzeStyleProfileWithImages(photoDataUrls, photoCount, options = {}) {
+    try {
+        console.log(`[Background] Starting style profile analysis with ${photoDataUrls.length} images...`);
+
+        // Convert data URLs to Blobs
+        const photoBlobs = [];
+        for (let i = 0; i < photoDataUrls.length; i++) {
+            try {
+                const response = await fetch(photoDataUrls[i]);
+                const blob = await response.blob();
+                photoBlobs.push(blob);
+                console.log(`[Background] Converted photo ${i + 1}: ${blob.size} bytes, ${blob.type}`);
+            } catch (error) {
+                console.error(`[Background] Failed to convert photo ${i + 1}:`, error);
+            }
+        }
+
+        if (photoBlobs.length === 0) {
+            throw new Error('Failed to process any photos for analysis');
+        }
+
+        console.log(`[Background] Successfully converted ${photoBlobs.length} photos to blobs`);
+
+        // Create the style analysis prompt
+        const prompt = `You are an expert fashion stylist and personal style consultant. I have uploaded ${photoBlobs.length} photos showing different outfits. Please analyze the ACTUAL IMAGES provided and create a comprehensive personal style profile based on what you SEE.
+
+IMPORTANT INSTRUCTIONS:
+1. Look carefully at each image and analyze the clothing, colors, patterns, and overall style visible in the photos
+2. Base your analysis on the VISUAL CONTENT of the images, not assumptions
+3. Identify specific colors, patterns, silhouettes, and style elements you can see
+4. Respond with ONLY a valid JSON object in the exact format specified below. Do not include any markdown formatting, explanations, or text outside the JSON.
+
+Based on analyzing the ${photoBlobs.length} images provided, create a detailed style profile:
+
+{
+  "analysis_summary": "Brief overview of the style analysis based on what you see in the images",
+  "color_palette": {
+    "best_colors": ["colors you see frequently in the images"],
+    "color_reasoning": "Why these colors appear to work well based on the images",
+    "avoid_colors": ["colors that don't appear or might not suit based on what you see"]
+  },
+  "style_categories": [
+    {
+      "name": "Primary style category based on visible clothing",
+      "confidence": "high/medium/low",
+      "description": "Why this style category fits based on what you observe"
+    },
+    {
+      "name": "Secondary style category",
+      "confidence": "high/medium/low",
+      "description": "Additional style observed in the images"
+    },
+    {
+      "name": "Tertiary style category",
+      "confidence": "high/medium/low",
+      "description": "Third style option visible"
+    }
+  ],
+  "body_type_analysis": {
+    "silhouettes": ["silhouettes you observe in the images"],
+    "fits": ["fit styles visible in the clothing"],
+    "recommendations": "Specific fit and silhouette advice based on what you see working well"
+  },
+  "pattern_preferences": {
+    "recommended_patterns": ["patterns you see in the images"],
+    "pattern_reasoning": "Why these patterns work based on observations",
+    "avoid_patterns": ["patterns to avoid or not seen"]
+  },
+  "overall_aesthetic": {
+    "keywords": ["keywords describing the overall aesthetic you observe"],
+    "description": "Complete aesthetic summary based on visual analysis",
+    "style_personality": "Style personality based on the images"
+  },
+  "shopping_recommendations": {
+    "key_pieces": ["pieces that would complement the observed style"],
+    "brands_to_consider": ["brand suggestions based on the style observed"],
+    "style_tips": ["tips based on what works in the images"]
+  }
+}
+
+Respond with ONLY the JSON object, no additional text or formatting.`;
+
+        // Use the multi-image analysis function
+        let aiResult;
+
+        if (photoBlobs.length === 1) {
+            // Single image - use single image analysis
+            aiResult = await executeAIPromptWithImage(prompt, photoBlobs[0], options);
+        } else {
+            // Multiple images - analyze them together
+            aiResult = await executeAIPromptWithMultipleImages(prompt, photoBlobs, options);
+        }
+
+        if (!aiResult.success) {
+            throw new Error(`AI analysis failed: ${aiResult.error}`);
+        }
+
+        console.log(`[Background] Style profile analysis complete`);
+
+        return {
+            success: true,
+            response: aiResult.response,
+            apiUsed: aiResult.apiUsed
+        };
+
+    } catch (error) {
+        console.error('[Background] Style profile analysis error:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
 // Clear all AI analysis data from Firestore
 async function clearAllAIAnalysis(userId) {
   try {
@@ -596,84 +729,72 @@ async function analyzeWardrobeItem(itemId, imageUrl, category) {
       return existingData.aiAnalysis;
     }
 
-    // STEP 2: No analysis found, make AI call
-    console.log(`[Background] No existing analysis for ${itemId}, analyzing now...`);
+    // STEP 2: No analysis found, fetch the image and analyze with AI
+    console.log(`[Background] No existing analysis for ${itemId}, fetching image and analyzing...`);
+    console.log(`[Background] Image URL: ${imageUrl}`);
 
-    // NOTE: Chrome AI cannot fetch or view images from URLs. The analysis is based on
-    // the category field provided by the user. This is a limitation we need to address
-    // by either: 1) Using a vision API like Gemini, or 2) Having users provide descriptions
+    // Fetch the image from the URL
+    let imageBlob;
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+      imageBlob = await response.blob();
+      console.log(`[Background] Image fetched successfully, size: ${imageBlob.size} bytes, type: ${imageBlob.type}`);
+    } catch (fetchError) {
+      console.error(`[Background] Failed to fetch image for ${itemId}:`, fetchError);
+      throw new Error(`Could not fetch image: ${fetchError.message}`);
+    }
 
     const prompt = `You are a fashion expert analyzing a clothing item for outfit matching.
 
-CATEGORY PROVIDED BY USER: ${category || 'Unknown'}
+Analyze the image provided and determine:
 
 CRITICAL INSTRUCTIONS:
-1. FIRST, determine if the category represents an actual clothing/fashion item
-2. If it's NOT a clothing item (e.g., "cat", "pet", "animal", "food", "object"), respond with:
+1. Look at the image carefully and determine if it shows an actual clothing/fashion/accessory item
+2. If it's NOT a clothing/fashion item (e.g., a pet, animal, food, random object), respond with:
    {
      "is_clothing": false,
      "error": "Not a clothing item",
-     "description": "This item is not a clothing or fashion item"
+     "description": "[Provide a detailed 1-2 sentence description of what you actually see in the image - be specific about what the subject is, its appearance, colors, and setting]"
    }
-3. If it IS a clothing item, provide detailed fashion analysis
+3. If it IS a clothing/fashion item, provide detailed fashion analysis based on what you SEE
 
-For CLOTHING ITEMS ONLY, respond with this JSON format:
+For CLOTHING/FASHION ITEMS ONLY, respond with this JSON format:
 {
   "is_clothing": true,
-  "colors": ["specific color name", "specific color name"],
+  "colors": {
+    "primary": "the most dominant/visible color",
+    "secondary": "second most visible color (optional)",
+    "tertiary": "third most visible color (optional)"
+  },
   "style": ["casual", "formal", "sporty", "bohemian", "minimalist", "streetwear", "preppy"],
   "pattern": "solid|striped|floral|plaid|geometric|printed|textured|embroidered",
   "formality": "casual|business casual|semi-formal|formal|athletic",
   "season": ["spring", "summer", "fall", "winter"],
-  "versatility_score": 7,
-  "description": "Accurate 1-2 sentence description based ONLY on the category ${category}"
+  "versatility_score": 1-10,
+  "description": "Detailed 2-3 sentence description of what you see in the image, including specific details about the item, its design, material appearance, and notable features"
 }
 
 RULES FOR ACCURATE ANALYSIS:
-- Use SPECIFIC color names based on the category (e.g., "white dress" → ["white"], "blue jeans" → ["blue", "denim"])
-- Extract colors directly from the category name when mentioned
-- Be realistic about the item type (shoes are shoes, not "casual bohemian minimalist")
-- Versatility score should reflect how many outfits this item can be part of
-- Description MUST match the category - don't make up details not in the category
-- If category is vague (like "undefined"), use generic neutral analysis
-
-EXAMPLES:
-Category: "White T-Shirt"
-{
-  "is_clothing": true,
-  "colors": ["white"],
-  "style": ["casual", "minimalist"],
-  "pattern": "solid",
-  "formality": "casual",
-  "season": ["spring", "summer", "fall", "winter"],
-  "versatility_score": 10,
-  "description": "A white t-shirt that pairs easily with any bottom"
-}
-
-Category: "Black Leather Jacket"
-{
-  "is_clothing": true,
-  "colors": ["black"],
-  "style": ["casual", "streetwear"],
-  "pattern": "solid",
-  "formality": "casual",
-  "season": ["fall", "winter", "spring"],
-  "versatility_score": 8,
-  "description": "A black leather jacket suitable for layering in cooler weather"
-}
-
-Category: "Cat" or "undefined" (if image shows a cat)
-{
-  "is_clothing": false,
-  "error": "Not a clothing item",
-  "description": "This appears to be a pet/animal, not a clothing item"
-}
-
-Now analyze: "${category || 'undefined'}"
+- Describe EXACTLY what you see in the image - be specific about colors, patterns, style
+- Use SPECIFIC color names (e.g., "navy blue", "rust orange", "cream white")
+- Identify the exact type of item (e.g., "one-shoulder dress", "hoop earrings", "leather ankle boots")
+- **COLOR DETECTION**: Focus on 2-3 most dominant colors only:
+  - **primary** (REQUIRED): The most visible/dominant color (e.g., for a white skirt with green flowers and yellow centers: primary is "white")
+  - **secondary** (OPTIONAL): Second most visible color if present (e.g., "green" for the flower pattern)
+  - **tertiary** (OPTIONAL): Third most visible color if present (e.g., "yellow" for flower centers)
+  - DO NOT list every single shade - focus on what would help match this item with other clothing
+  - Example: A white dress with small blue polka dots should be {"primary": "white", "secondary": "blue"} NOT a list of 10 different shades
+- Versatility score should reflect how many different outfits this item could work with
+- Description must be detailed and accurate to what's visible in the image
+- If you see jewelry or accessories, analyze them as fashion items
+- Category hint from user: "${category || 'unknown'}" (use this only as a hint, trust what you see in the image)
 
 Respond with ONLY valid JSON, no markdown or extra text.`;
 
-    const aiResult = await executeAIPrompt(prompt, {
+    const aiResult = await executeAIPromptWithImage(prompt, imageBlob, {
       temperature: 0.7,
       maxRetries: 3
     });
@@ -704,7 +825,7 @@ Respond with ONLY valid JSON, no markdown or extra text.`;
         analysis = {
           is_clothing: false,
           error: parsed.error || 'Not a clothing item',
-          colors: ['n/a'],
+          colors: { primary: 'n/a' },
           style: ['n/a'],
           pattern: 'n/a',
           formality: 'n/a',
@@ -732,7 +853,7 @@ Respond with ONLY valid JSON, no markdown or extra text.`;
       // Provide fallback analysis
       analysis = {
         is_clothing: true,
-        colors: ['unknown'],
+        colors: { primary: 'unknown' },
         style: ['casual'],
         pattern: 'unknown',
         formality: 'casual',
@@ -754,6 +875,350 @@ Respond with ONLY valid JSON, no markdown or extra text.`;
 
   } catch (error) {
     console.error(`[Background] Error analyzing wardrobe item ${itemId}:`, error);
+    throw error;
+  }
+}
+
+// Outfit Matching Functions
+
+/**
+ * Filter wardrobe items by attributes for outfit matching (Stage 1)
+ * Uses AI to eliminate incompatible items based on category, color, style
+ * @param {Object} product - Product AI analysis attributes
+ * @param {Array} wardrobeItems - Wardrobe items with AI analysis and originalIndex
+ * @returns {Promise<Object>} Shortlist of compatible item indices and eliminated reasons
+ */
+async function filterWardrobeItemsByAttributes(product, wardrobeItems) {
+  try {
+    console.log('[Background] Starting attribute-based filtering...');
+    console.log('[Background] Product category:', product.category);
+    console.log('[Background] Wardrobe items to filter:', wardrobeItems.length);
+
+    // Build the filtering prompt
+    const filterPrompt = `You are a fashion expert performing initial outfit compatibility screening.
+
+PRODUCT BEING CONSIDERED:
+- Category: ${product.category || 'unknown'}
+- Colors: ${JSON.stringify(product.colors)}
+- Style: ${product.style ? product.style.join(', ') : 'unknown'}
+- Pattern: ${product.pattern || 'unknown'}
+- Formality: ${product.formality || 'casual'}
+
+USER'S WARDROBE ITEMS:
+${wardrobeItems.map((item, idx) => `
+[${idx}] ${(item.category || 'unknown').toUpperCase()}:
+- Colors: ${JSON.stringify(item.colors)}
+- Style: ${item.style ? item.style.join(', ') : 'unknown'}
+- Pattern: ${item.pattern || 'unknown'}
+- Formality: ${item.formality || 'casual'}
+- Description: ${item.description || 'No description'}
+- Is Clothing: ${item.is_clothing !== false ? 'yes' : 'NO - not a clothing item'}
+`).join('\n')}
+
+FILTERING TASK:
+Your goal is to create a shortlist of wardrobe items that could work well with this product to create a complete outfit.
+
+FILTERING RULES:
+0. **CRITICAL - Non-Clothing Items:**
+   - ALWAYS eliminate items with category "N/A", "unknown", or "n/a"
+   - ALWAYS eliminate items marked with "Is Clothing: NO"
+   - These are NOT clothing items (e.g., pets, food, random objects) and should NEVER be in an outfit
+
+1. **Category Compatibility:**
+   - If product is a TOP: Keep BOTTOMS, SHOES, and optionally OUTERWEAR/ACCESSORIES
+   - If product is a BOTTOM: Keep TOPS, SHOES, and optionally OUTERWEAR/ACCESSORIES
+   - If product is a DRESS: Keep SHOES and optionally OUTERWEAR/ACCESSORIES
+   - If product is SHOES: Keep TOPS+BOTTOMS or DRESSES, and optionally OUTERWEAR/ACCESSORIES
+   - If product is OUTERWEAR: Keep complete outfits (TOP+BOTTOM+SHOES or DRESS+SHOES)
+   - Eliminate items in the same category as the product (don't pair top with top)
+
+2. **Color Compatibility:**
+   - IMPORTANT: Use ONLY the colors listed in the JSON data above for each item
+   - DO NOT invent or imagine colors - only reference what's explicitly stated
+   - Eliminate severe color clashes based on the ACTUAL colors provided (e.g., red with orange, bright yellow with hot pink)
+   - Keep complementary colors (e.g., blue with white, black with anything, earth tones together)
+   - Keep neutral colors (black, white, gray, beige, navy)
+   - Consider color harmony principles
+   - If product has "light olive green", DO NOT describe it as "red" or any other color
+
+3. **Style Compatibility:**
+   - Eliminate extreme style mismatches (e.g., formal with athletic, bohemian with preppy)
+   - Keep items with compatible or complementary styles
+   - Mixed styles can work if formality levels align
+
+4. **Pattern Compatibility:**
+   - If product has bold patterns, prefer solid or subtle wardrobe items
+   - Multiple patterns can work if they share color palette
+   - Eliminate competing bold patterns
+
+5. **Formality Alignment:**
+   - Eliminate extreme formality mismatches (e.g., formal with athletic)
+   - Business casual can mix with casual or semi-formal
+
+RESPOND WITH ONLY valid JSON (no markdown, no extra text):
+{
+  "shortlist": [0, 2, 5, 7],
+  "eliminated": {
+    "1": "Same category as product",
+    "3": "Color clash - red product with orange item",
+    "4": "Style mismatch - formal with athletic"
+  },
+  "reasoning": "Brief explanation of shortlist strategy"
+}
+
+Include the indices of items to KEEP in the "shortlist" array.
+Include the indices of items to ELIMINATE with reasons in the "eliminated" object.`;
+
+    // Execute AI prompt
+    const aiResult = await executeAIPrompt(filterPrompt, {
+      temperature: 0.7,
+      maxRetries: 3
+    });
+
+    if (!aiResult.success) {
+      throw new Error(`AI filtering failed: ${aiResult.error}`);
+    }
+
+    // Parse AI response
+    console.log('[Background] AI filtering response received, parsing...');
+    let filterResult;
+
+    try {
+      const responseText = aiResult.response.trim();
+
+      // Remove markdown code blocks if present
+      const cleanedResponse = responseText
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+
+      filterResult = JSON.parse(cleanedResponse);
+
+      // Validate structure
+      if (!filterResult.shortlist || !Array.isArray(filterResult.shortlist)) {
+        throw new Error('Invalid response structure: missing shortlist array');
+      }
+
+      console.log('[Background] Filtering successful:');
+      console.log(`  - Shortlist: ${filterResult.shortlist.length} items`);
+      console.log(`  - Eliminated: ${Object.keys(filterResult.eliminated || {}).length} items`);
+      console.log(`  - Reasoning: ${filterResult.reasoning}`);
+
+      return filterResult;
+
+    } catch (parseError) {
+      console.error('[Background] Failed to parse AI filtering response:', parseError);
+      console.error('Raw AI response:', aiResult.response);
+
+      // Fallback: create shortlist by basic category rules
+      console.log('[Background] Using fallback category-based filtering...');
+      const shortlist = [];
+      const eliminated = {};
+
+      const productCategory = (product.category || 'unknown').toLowerCase();
+
+      // Validate product category
+      const validCategories = ['top', 'bottom', 'dress', 'shoes', 'outerwear', 'accessories'];
+      if (!validCategories.includes(productCategory) || productCategory === 'unknown' || productCategory === 'n/a') {
+        console.warn('[Background] Product has invalid category:', productCategory);
+        return {
+          shortlist: [],
+          eliminated: {},
+          reasoning: 'Product category is invalid or missing - cannot filter wardrobe items'
+        };
+      }
+
+      wardrobeItems.forEach((item, idx) => {
+        const itemCategory = (item.category || 'unknown').toLowerCase();
+
+        // CRITICAL: Eliminate items that are not valid clothing items
+        if (!validCategories.includes(itemCategory) || itemCategory === 'unknown' || itemCategory === 'n/a') {
+          eliminated[idx] = 'Invalid or missing category - not a clothing item';
+          return;
+        }
+
+        // Check if item is marked as non-clothing by AI
+        if (item.is_clothing === false) {
+          eliminated[idx] = 'Not a clothing item';
+          return;
+        }
+
+        // Basic category compatibility
+        if (itemCategory === productCategory) {
+          eliminated[idx] = 'Same category as product';
+        } else if (productCategory === 'top' && ['bottom', 'shoes', 'outerwear', 'accessories'].includes(itemCategory)) {
+          shortlist.push(idx);
+        } else if (productCategory === 'bottom' && ['top', 'shoes', 'outerwear', 'accessories'].includes(itemCategory)) {
+          shortlist.push(idx);
+        } else if (productCategory === 'dress' && ['shoes', 'outerwear', 'accessories'].includes(itemCategory)) {
+          shortlist.push(idx);
+        } else if (productCategory === 'shoes' && ['top', 'bottom', 'dress', 'outerwear', 'accessories'].includes(itemCategory)) {
+          shortlist.push(idx);
+        } else {
+          eliminated[idx] = 'Category incompatibility';
+        }
+      });
+
+      return {
+        shortlist: shortlist,
+        eliminated: eliminated,
+        reasoning: 'Fallback category-based filtering applied due to AI parsing error'
+      };
+    }
+
+  } catch (error) {
+    console.error('[Background] Error in filterWardrobeItemsByAttributes:', error);
+    throw error;
+  }
+}
+
+/**
+ * Compose complete outfit using visual image analysis (Stage 2)
+ * Analyzes actual images to determine best outfit combination
+ * @param {Object} product - Product with imageUrl and AI analysis
+ * @param {Array} shortlistedItems - Shortlisted wardrobe items with imageUrls
+ * @returns {Promise<Object>} Best outfit with visual compatibility scores
+ */
+async function composeOutfitVisual(product, shortlistedItems) {
+  try {
+    console.log('[Background] Starting visual outfit composition...');
+    console.log('[Background] Product category:', product.category);
+    console.log('[Background] Shortlisted items:', shortlistedItems.length);
+
+    // Build the visual analysis prompt
+    const visualPrompt = `You are a professional stylist analyzing outfit visual compatibility using actual product information.
+
+PRODUCT BEING STYLED:
+- Category: ${product.category || 'unknown'}
+- Colors: ${JSON.stringify(product.colors)}
+- Style: ${product.style ? product.style.join(', ') : 'unknown'}
+- Pattern: ${product.pattern || 'unknown'}
+- Formality: ${product.formality || 'casual'}
+
+WARDROBE ITEMS TO PAIR WITH (Already pre-filtered for basic compatibility):
+${shortlistedItems.map((item, idx) => `
+[${idx}] ${(item.category || 'unknown').toUpperCase()}:
+- Colors: ${JSON.stringify(item.colors)}
+- Style: ${item.style ? item.style.join(', ') : 'unknown'}
+- Pattern: ${item.pattern || 'unknown'}
+- Formality: ${item.formality || 'casual'}
+- Description: ${item.description || 'No description'}
+`).join('\n')}
+
+STYLING TASK:
+Create the BEST complete outfit by selecting items from the wardrobe list that pair perfectly with this product.
+
+OUTFIT COMPOSITION CRITERIA:
+1. **Completeness**: Outfit must be complete and wearable
+   - If product is TOP: Select 1 BOTTOM + 1 SHOES (optionally: OUTERWEAR or ACCESSORIES)
+   - If product is BOTTOM: Select 1 TOP + 1 SHOES (optionally: OUTERWEAR or ACCESSORIES)
+   - If product is DRESS: Select 1 SHOES (optionally: OUTERWEAR or ACCESSORIES)
+   - If product is SHOES: Select 1 TOP + 1 BOTTOM OR 1 DRESS (optionally: OUTERWEAR or ACCESSORIES)
+
+2. **Visual Harmony** (Score 0-100):
+   - Color palette cohesion - do colors work together visually?
+   - Pattern mixing compatibility - can patterns coexist without clashing?
+   - Proportion and silhouette balance - do shapes complement each other?
+   - Visual weight distribution - is the outfit balanced?
+
+3. **Style Consistency** (Score 0-100):
+   - Do all items share a coherent aesthetic?
+   - Is formality level consistent?
+   - Would a fashion expert approve this pairing?
+
+4. **Versatility** (Score 0-100):
+   - Can this outfit work for multiple occasions?
+   - Is it practical and wearable?
+
+RESPOND WITH ONLY valid JSON (no markdown, no extra text):
+{
+  "best_outfit": {
+    "items": [
+      {
+        "index": 0,
+        "category": "bottom",
+        "visual_score": 92,
+        "reasoning": "Light wash denim complements the product's casual style and earth tone colors"
+      },
+      {
+        "index": 3,
+        "category": "shoes",
+        "visual_score": 88,
+        "reasoning": "White sneakers add a fresh contrast while maintaining casual vibe"
+      }
+    ],
+    "overall_confidence": 90,
+    "visual_harmony_score": 92,
+    "style_consistency_score": 90,
+    "versatility_score": 88,
+    "occasion": "weekend brunch, casual office, coffee date",
+    "why_it_works": "This outfit balances earth tones with fresh whites, creating a relaxed yet put-together look. The casual styles align perfectly, and the color palette is naturally harmonious.",
+    "styling_tips": "Try rolling up the sleeves and adding a simple necklace to elevate the look"
+  },
+  "has_complete_outfit": true,
+  "missing_categories": []
+}
+
+IMPORTANT:
+- Select indices from the wardrobe items list [0, 1, 2, ...]
+- Include ONLY items that are ESSENTIAL for the outfit (don't force accessories if they don't fit)
+- Ensure outfit is COMPLETE (has all required categories)
+- Be HONEST with scores - don't inflate them
+- If you CANNOT create a complete outfit, set "has_complete_outfit": false and list "missing_categories"`;
+
+    // Execute AI prompt
+    const aiResult = await executeAIPrompt(visualPrompt, {
+      temperature: 0.7,
+      maxRetries: 3
+    });
+
+    if (!aiResult.success) {
+      throw new Error(`Visual analysis failed: ${aiResult.error}`);
+    }
+
+    // Parse AI response
+    console.log('[Background] Visual analysis response received, parsing...');
+    let visualResult;
+
+    try {
+      const responseText = aiResult.response.trim();
+
+      // Remove markdown code blocks if present
+      const cleanedResponse = responseText
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+
+      visualResult = JSON.parse(cleanedResponse);
+
+      // Validate structure
+      if (!visualResult.best_outfit && !visualResult.has_complete_outfit) {
+        throw new Error('Invalid response structure: missing outfit data');
+      }
+
+      console.log('[Background] Visual composition successful:');
+      console.log(`  - Outfit confidence: ${visualResult.best_outfit?.overall_confidence || 0}%`);
+      console.log(`  - Items in outfit: ${visualResult.best_outfit?.items?.length || 0}`);
+      console.log(`  - Complete: ${visualResult.has_complete_outfit !== false}`);
+
+      return visualResult;
+
+    } catch (parseError) {
+      console.error('[Background] Failed to parse visual analysis response:', parseError);
+      console.error('Raw AI response:', aiResult.response);
+
+      // Fallback: return a no-match result
+      console.log('[Background] Using fallback no-match result...');
+      return {
+        has_complete_outfit: false,
+        missing_categories: ['Unable to parse outfit analysis'],
+        best_outfit: null,
+        error: 'Failed to parse AI outfit composition'
+      };
+    }
+
+  } catch (error) {
+    console.error('[Background] Error in composeOutfitVisual:', error);
     throw error;
   }
 }
@@ -903,6 +1368,205 @@ async function executeAIPrompt(prompt, options = {}) {
                 };
             }
             
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+    }
+}
+
+// Execute AI prompt with multiple image inputs using modern Chrome AI Prompt API
+async function executeAIPromptWithMultipleImages(prompt, imageBlobs, options = {}) {
+    const maxRetries = options.maxRetries || 3;
+    const retryDelay = options.retryDelay || 1000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`AI prompt with ${imageBlobs.length} images attempt ${attempt}/${maxRetries}`);
+            console.log(`Prompt: ${prompt.substring(0, 100)}...`);
+
+            // Check AI availability
+            const availability = await checkChromeAIAvailability();
+            if (!availability.available) {
+                throw new Error(availability.message);
+            }
+
+            if (availability.status !== 'readily') {
+                throw new Error('AI not ready: ' + availability.message);
+            }
+
+            let response;
+            let apiUsed;
+
+            // Try modern LanguageModel API with multiple images
+            if (typeof LanguageModel !== 'undefined') {
+                console.log(`Using LanguageModel API with ${imageBlobs.length} image inputs...`);
+
+                try {
+                    // Create session with image input support
+                    const sessionOptions = {
+                        temperature: options.temperature || 0.7,
+                        topK: options.topK || 40,
+                        expectedInputs: [{ type: "image" }]
+                    };
+
+                    const session = await LanguageModel.create(sessionOptions);
+
+                    // Build content array with all images
+                    const content = [
+                        { type: 'text', value: prompt }
+                    ];
+
+                    // Add all images to the content array
+                    imageBlobs.forEach((blob, index) => {
+                        content.push({ type: 'image', value: blob });
+                        console.log(`Added image ${index + 1}: ${blob.size} bytes, ${blob.type}`);
+                    });
+
+                    // Append message with all images
+                    await session.append([
+                        {
+                            role: 'user',
+                            content: content
+                        }
+                    ]);
+
+                    // Get the response
+                    response = await session.prompt('Analyze all the images provided based on the instructions given.');
+                    apiUsed = `LanguageModel (with ${imageBlobs.length} images)`;
+
+                    // Clean up
+                    if (session.destroy) {
+                        session.destroy();
+                    }
+                } catch (imageError) {
+                    console.warn('LanguageModel multi-image support not available:', imageError);
+                    // Fall back to analyzing first image only
+                    console.log('Falling back to single image analysis of first photo...');
+                    return await executeAIPromptWithImage(prompt, imageBlobs[0], options);
+                }
+            }
+            // Try window.ai API (unlikely to support images)
+            else if (typeof window !== 'undefined' && window.ai) {
+                console.log('window.ai does not support image inputs, falling back to text-only...');
+                return await executeAIPrompt(prompt, options);
+            }
+            else {
+                throw new Error('No compatible AI API found');
+            }
+
+            console.log(`AI prompt with ${imageBlobs.length} images successful on attempt ${attempt} using ${apiUsed}`);
+            return {
+                success: true,
+                response: response,
+                attempt: attempt,
+                apiUsed: apiUsed
+            };
+
+        } catch (error) {
+            console.error(`AI prompt with multiple images attempt ${attempt} failed:`, error);
+
+            if (attempt === maxRetries) {
+                // If all retries failed, try with just the first image
+                console.log('All multi-image analysis attempts failed, falling back to first image only...');
+                return await executeAIPromptWithImage(prompt, imageBlobs[0], options);
+            }
+
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+    }
+}
+
+// Execute AI prompt with image input using modern Chrome AI Prompt API
+async function executeAIPromptWithImage(prompt, imageBlob, options = {}) {
+    const maxRetries = options.maxRetries || 3;
+    const retryDelay = options.retryDelay || 1000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`AI prompt with image attempt ${attempt}/${maxRetries}`);
+            console.log(`Prompt: ${prompt.substring(0, 100)}...`);
+            console.log(`Image: ${imageBlob.size} bytes, type: ${imageBlob.type}`);
+
+            // Check AI availability
+            const availability = await checkChromeAIAvailability();
+            if (!availability.available) {
+                throw new Error(availability.message);
+            }
+
+            if (availability.status !== 'readily') {
+                throw new Error('AI not ready: ' + availability.message);
+            }
+
+            let response;
+            let apiUsed;
+
+            // Try modern LanguageModel API with image support
+            if (typeof LanguageModel !== 'undefined') {
+                console.log('Using LanguageModel API with image input...');
+
+                try {
+                    // Create session with image input support
+                    const sessionOptions = {
+                        temperature: options.temperature || 0.7,
+                        topK: options.topK || 40,
+                        expectedInputs: [{ type: "image" }]
+                    };
+
+                    const session = await LanguageModel.create(sessionOptions);
+
+                    // Append message with image
+                    await session.append([
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', value: prompt },
+                                { type: 'image', value: imageBlob }
+                            ]
+                        }
+                    ]);
+
+                    // Get the response
+                    response = await session.prompt('Analyze this image based on the instructions provided.');
+                    apiUsed = 'LanguageModel (with image)';
+
+                    // Clean up
+                    if (session.destroy) {
+                        session.destroy();
+                    }
+                } catch (imageError) {
+                    console.warn('LanguageModel image support not available:', imageError);
+                    // Fall back to text-only analysis
+                    console.log('Falling back to text-only analysis...');
+                    return await executeAIPrompt(prompt, options);
+                }
+            }
+            // Try window.ai API (unlikely to support images, but try)
+            else if (typeof window !== 'undefined' && window.ai) {
+                console.log('window.ai does not support image inputs, falling back to text-only...');
+                return await executeAIPrompt(prompt, options);
+            }
+            else {
+                throw new Error('No compatible AI API found');
+            }
+
+            console.log(`AI prompt with image successful on attempt ${attempt} using ${apiUsed}`);
+            return {
+                success: true,
+                response: response,
+                attempt: attempt,
+                apiUsed: apiUsed
+            };
+
+        } catch (error) {
+            console.error(`AI prompt with image attempt ${attempt} failed:`, error);
+
+            if (attempt === maxRetries) {
+                // If all retries failed, fall back to text-only analysis
+                console.log('All image analysis attempts failed, falling back to text-only analysis...');
+                return await executeAIPrompt(prompt, options);
+            }
+
             // Wait before retry
             await new Promise(resolve => setTimeout(resolve, retryDelay));
         }

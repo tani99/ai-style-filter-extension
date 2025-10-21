@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttributeFilter Service Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #555;
+            font-size: 18px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { border-left: 4px solid #10b981; }
+        .error { border-left: 4px solid #ef4444; }
+        .info { border-left: 4px solid #3b82f6; }
+        .label {
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 AttributeFilter Service Test</h1>
+
+        <div class="test-section">
+            <h2>Test 1: Category Rules</h2>
+            <div class="label">Test determineNeededCategories() method</div>
+            <button onclick="testCategoryRules()">Run Test</button>
+            <div id="category-result" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Test 2: Filter by Attributes (Mock Data)</h2>
+            <div class="label">Test filterByAttributes() with sample product and wardrobe</div>
+            <button onclick="testFilterByAttributes()">Run Test</button>
+            <div id="filter-result" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Test 3: Cache Operations</h2>
+            <div class="label">Test caching functionality</div>
+            <button onclick="testCache()">Run Test</button>
+            <div id="cache-result" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script src="AttributeFilter.js"></script>
+    <script>
+        // Test 1: Category Rules
+        function testCategoryRules() {
+            const resultDiv = document.getElementById('category-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+
+            try {
+                const filter = new AttributeFilter();
+                const categories = ['top', 'bottom', 'dress', 'shoes', 'outerwear', 'accessories'];
+                let output = 'Category Rules Test Results:\n\n';
+
+                categories.forEach(category => {
+                    const rules = filter.determineNeededCategories(category);
+                    output += `${category.toUpperCase()}:\n`;
+                    output += `  Needs: ${JSON.stringify(rules.needs)}\n`;
+                    if (rules.optional) output += `  Optional: ${JSON.stringify(rules.optional)}\n`;
+                    if (rules.alternative) output += `  Alternative: ${JSON.stringify(rules.alternative)}\n`;
+                    output += '\n';
+                });
+
+                resultDiv.textContent = output;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                resultDiv.textContent = `ERROR: ${error.message}\n${error.stack}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // Test 2: Filter by Attributes (will require extension context)
+        async function testFilterByAttributes() {
+            const resultDiv = document.getElementById('filter-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.textContent = 'Testing filter by attributes...\n';
+
+            try {
+                // Check if we're in extension context
+                if (typeof chrome === 'undefined' || !chrome.runtime) {
+                    throw new Error('This test requires Chrome extension context. Please run from extension tab.');
+                }
+
+                const filter = new AttributeFilter();
+
+                // Sample product (red dress)
+                const product = {
+                    id: 'test-product-1',
+                    aiAnalysis: {
+                        category: 'dress',
+                        colors: { primary: 'red', secondary: 'white' },
+                        style: ['casual', 'bohemian'],
+                        pattern: 'floral',
+                        formality: 'casual'
+                    }
+                };
+
+                // Sample wardrobe items
+                const wardrobeItems = [
+                    {
+                        id: 'item-1',
+                        aiAnalysis: {
+                            category: 'shoes',
+                            colors: { primary: 'black' },
+                            style: ['casual'],
+                            pattern: 'solid',
+                            formality: 'casual'
+                        }
+                    },
+                    {
+                        id: 'item-2',
+                        aiAnalysis: {
+                            category: 'dress',
+                            colors: { primary: 'blue' },
+                            style: ['formal'],
+                            pattern: 'solid',
+                            formality: 'formal'
+                        }
+                    },
+                    {
+                        id: 'item-3',
+                        aiAnalysis: {
+                            category: 'top',
+                            colors: { primary: 'white' },
+                            style: ['casual'],
+                            pattern: 'solid',
+                            formality: 'casual'
+                        }
+                    },
+                    {
+                        id: 'item-4',
+                        aiAnalysis: {
+                            category: 'shoes',
+                            colors: { primary: 'tan' },
+                            style: ['casual', 'bohemian'],
+                            pattern: 'solid',
+                            formality: 'casual'
+                        }
+                    }
+                ];
+
+                resultDiv.textContent += 'Product: Red floral dress (casual/bohemian)\n';
+                resultDiv.textContent += `Wardrobe: ${wardrobeItems.length} items\n\n`;
+                resultDiv.textContent += 'Calling filterByAttributes()...\n\n';
+
+                const shortlist = await filter.filterByAttributes(product, wardrobeItems);
+
+                resultDiv.textContent += `✅ Filtering complete!\n\n`;
+                resultDiv.textContent += `Shortlisted items: ${shortlist.length}\n\n`;
+                shortlist.forEach((item, idx) => {
+                    resultDiv.textContent += `[${idx}] ${item.id} - ${item.aiAnalysis.category}\n`;
+                });
+
+                resultDiv.className = 'result success';
+
+            } catch (error) {
+                resultDiv.textContent += `\nERROR: ${error.message}\n${error.stack}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // Test 3: Cache Operations
+        function testCache() {
+            const resultDiv = document.getElementById('cache-result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+
+            try {
+                const filter = new AttributeFilter();
+                let output = 'Cache Test Results:\n\n';
+
+                // Check initial stats
+                let stats = filter.getCacheStats();
+                output += `Initial cache size: ${stats.size}/${stats.maxSize}\n\n`;
+
+                // Simulate adding to cache manually (for testing)
+                const product = { id: 'test-1', aiAnalysis: { category: 'top' } };
+                const wardrobe = [{ id: 'w1' }, { id: 'w2' }];
+                const cacheKey = filter._generateCacheKey(product, wardrobe);
+
+                output += `Generated cache key: ${cacheKey.substring(0, 50)}...\n\n`;
+
+                // Test clearCache
+                filter.clearCache();
+                stats = filter.getCacheStats();
+                output += `After clearCache(): ${stats.size}/${stats.maxSize}\n`;
+
+                resultDiv.textContent = output;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                resultDiv.textContent = `ERROR: ${error.message}\n${error.stack}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // Auto-run category rules test on load
+        window.addEventListener('load', () => {
+            testCategoryRules();
+        });
+    </script>
+</body>
+</html>
