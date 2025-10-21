@@ -258,7 +258,16 @@ export class VisualIndicators {
      * @returns {Promise<HTMLElement>} Try-on result element
      */
     async handleVirtualTryOn(img, index) {
-        const cacheKey = this.generateTryonCacheKey(img.src);
+        // Get the try-on photo from storage first (needed for cache key)
+        const storageResult = await chrome.storage.local.get(['tryonPhoto']);
+
+        if (!storageResult.tryonPhoto) {
+            throw new Error('No try-on photo uploaded. Please upload a try-on photo in the extension settings.');
+        }
+
+        // Generate cache key using both clothing image URL and user photo
+        const cacheKey = this.generateTryonCacheKey(img.src, storageResult.tryonPhoto);
+        console.log(`🔑 Cache key generated for image ${index + 1}: ${cacheKey.substring(0, 30)}...`);
 
         // Check if we have a cached result
         const cachedResult = await this.getCachedTryonResult(cacheKey);
@@ -271,7 +280,7 @@ export class VisualIndicators {
             return resultOverlay;
         }
 
-        console.log(`🎨 Generating new virtual try-on for image ${index + 1}`);
+        console.log(`🎨 Generating new virtual try-on for image ${index + 1} (cache miss)`);
 
         // Create loading overlay
         const loadingOverlay = this.createTryonLoadingOverlay(img);
@@ -1200,13 +1209,16 @@ export class VisualIndicators {
     /**
      * Generate cache key for try-on results
      * @param {string} clothingImageUrl - Clothing image URL
+     * @param {string} userPhoto - User's try-on photo (base64)
      * @returns {string} Cache key
      * @private
      */
-    generateTryonCacheKey(clothingImageUrl) {
-        // Create a simple hash from the URL
-        // Use the URL as-is since it uniquely identifies the clothing item
-        return `tryon_${btoa(clothingImageUrl).substring(0, 50)}`;
+    generateTryonCacheKey(clothingImageUrl, userPhoto) {
+        // Create a hash from both the clothing URL and user photo
+        // This ensures cache is invalidated when user changes their photo
+        const clothingHash = btoa(clothingImageUrl).substring(0, 30);
+        const userPhotoHash = btoa(userPhoto.substring(0, 100)).substring(0, 20);
+        return `tryon_${clothingHash}_${userPhotoHash}`;
     }
 
     /**
