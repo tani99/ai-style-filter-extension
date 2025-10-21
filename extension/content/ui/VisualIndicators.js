@@ -416,9 +416,6 @@ export class VisualIndicators {
         overlay.appendChild(tryonImg);
         this.positionTryonOverlay(overlay, img);
 
-        // Store reference to img for auto-close callback
-        overlay.dataset.imageIndex = index;
-
         return overlay;
     }
 
@@ -1270,24 +1267,30 @@ export class VisualIndicators {
             const result = await chrome.storage.local.get(['tryOnCache']);
             const cache = result.tryOnCache || {};
 
-            // Limit cache size (keep max 20 entries)
+            // Limit cache size to 3 entries to avoid quota issues
+            // Base64 images are very large (~1-2MB each)
             const cacheKeys = Object.keys(cache);
-            if (cacheKeys.length >= 20) {
+            if (cacheKeys.length >= 3) {
                 // Remove oldest entry
                 const oldestKey = cacheKeys.reduce((oldest, key) => {
                     return cache[key].timestamp < cache[oldest].timestamp ? key : oldest;
                 }, cacheKeys[0]);
                 delete cache[oldestKey];
-                console.log(`🗑️ Removed oldest cache entry: ${oldestKey.substring(0, 20)}...`);
+                console.log(`🗑️ Removed oldest cache entry (quota limit): ${oldestKey.substring(0, 20)}...`);
             }
 
             cache[cacheKey] = data;
 
             await chrome.storage.local.set({ tryOnCache: cache });
-            console.log(`💾 Cached try-on result: ${cacheKey.substring(0, 20)}...`);
+            console.log(`💾 Cached try-on result (${cacheKeys.length + 1}/3): ${cacheKey.substring(0, 20)}...`);
 
         } catch (error) {
             console.error('Error caching try-on result:', error);
+            // If quota exceeded, clear all cache and try again
+            if (error.message && error.message.includes('quota')) {
+                console.warn('⚠️ Storage quota exceeded, clearing all try-on cache...');
+                await chrome.storage.local.set({ tryOnCache: {} });
+            }
         }
     }
 }
