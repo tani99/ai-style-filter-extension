@@ -252,35 +252,13 @@ export class VisualIndicators {
     }
 
     /**
-     * Handle virtual try-on generation (with caching)
+     * Handle virtual try-on generation (on demand, no caching)
      * @param {HTMLImageElement} img - Product image element
      * @param {number} index - Image index
      * @returns {Promise<HTMLElement>} Try-on result element
      */
     async handleVirtualTryOn(img, index) {
-        // Get the try-on photo from storage first (needed for cache key)
-        const storageResult = await chrome.storage.local.get(['tryonPhoto']);
-
-        if (!storageResult.tryonPhoto) {
-            throw new Error('No try-on photo uploaded. Please upload a try-on photo in the extension settings.');
-        }
-
-        // Generate cache key using both clothing image URL and user photo
-        const cacheKey = this.generateTryonCacheKey(img.src, storageResult.tryonPhoto);
-        console.log(`🔑 Cache key generated for image ${index + 1}: ${cacheKey.substring(0, 30)}...`);
-
-        // Check if we have a cached result
-        const cachedResult = await this.getCachedTryonResult(cacheKey);
-
-        if (cachedResult) {
-            console.log(`📦 Using cached try-on for image ${index + 1}`);
-            // Create and display result overlay with cached image
-            const resultOverlay = this.createTryonResultOverlay(img, cachedResult.imageUrl, img.src);
-            document.body.appendChild(resultOverlay);
-            return resultOverlay;
-        }
-
-        console.log(`🎨 Generating new virtual try-on for image ${index + 1} (cache miss)`);
+        console.log(`🎨 Generating virtual try-on for image ${index + 1}`);
 
         // Create loading overlay
         const loadingOverlay = this.createTryonLoadingOverlay(img);
@@ -312,12 +290,6 @@ export class VisualIndicators {
             console.log('Try-on response:', response);
 
             if (response.success && response.imageUrl) {
-                // Cache the result
-                await this.cacheTryonResult(cacheKey, {
-                    imageUrl: response.imageUrl,
-                    timestamp: Date.now()
-                });
-
                 // Create and display result overlay
                 const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, img.src);
                 document.body.appendChild(resultOverlay);
@@ -1203,96 +1175,6 @@ export class VisualIndicators {
         }
     }
 
-    /**
-     * Generate cache key for try-on results
-     * @param {string} clothingImageUrl - Clothing image URL
-     * @param {string} userPhoto - User's try-on photo (base64)
-     * @returns {string} Cache key
-     * @private
-     */
-    generateTryonCacheKey(clothingImageUrl, userPhoto) {
-        // Create a hash from both the clothing URL and user photo
-        // This ensures cache is invalidated when user changes their photo
-        const clothingHash = btoa(clothingImageUrl).substring(0, 30);
-        const userPhotoHash = btoa(userPhoto.substring(0, 100)).substring(0, 20);
-        return `tryon_${clothingHash}_${userPhotoHash}`;
-    }
-
-    /**
-     * Get cached try-on result
-     * @param {string} cacheKey - Cache key
-     * @returns {Promise<Object|null>} Cached result or null
-     * @private
-     */
-    async getCachedTryonResult(cacheKey) {
-        try {
-            const result = await chrome.storage.local.get(['tryOnCache']);
-            const cache = result.tryOnCache || {};
-
-            if (cache[cacheKey]) {
-                const cached = cache[cacheKey];
-
-                // Check if cache is expired (24 hours)
-                const now = Date.now();
-                const cacheAge = now - cached.timestamp;
-                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-
-                if (cacheAge < maxAge) {
-                    console.log(`📦 Cache hit for key: ${cacheKey.substring(0, 20)}...`);
-                    return cached;
-                } else {
-                    console.log(`⏰ Cache expired for key: ${cacheKey.substring(0, 20)}...`);
-                    // Remove expired cache entry
-                    delete cache[cacheKey];
-                    await chrome.storage.local.set({ tryOnCache: cache });
-                }
-            }
-
-            return null;
-
-        } catch (error) {
-            console.error('Error getting cached try-on:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Cache try-on result
-     * @param {string} cacheKey - Cache key
-     * @param {Object} data - Data to cache
-     * @private
-     */
-    async cacheTryonResult(cacheKey, data) {
-        try {
-            const result = await chrome.storage.local.get(['tryOnCache']);
-            const cache = result.tryOnCache || {};
-
-            // Limit cache size to 3 entries to avoid quota issues
-            // Base64 images are very large (~1-2MB each)
-            const cacheKeys = Object.keys(cache);
-            if (cacheKeys.length >= 3) {
-                // Remove oldest entry
-                const oldestKey = cacheKeys.reduce((oldest, key) => {
-                    return cache[key].timestamp < cache[oldest].timestamp ? key : oldest;
-                }, cacheKeys[0]);
-                delete cache[oldestKey];
-                console.log(`🗑️ Removed oldest cache entry (quota limit): ${oldestKey.substring(0, 20)}...`);
-            }
-
-            cache[cacheKey] = data;
-
-            await chrome.storage.local.set({ tryOnCache: cache });
-            console.log(`💾 Cached try-on result (${cacheKeys.length + 1}/3): ${cacheKey.substring(0, 20)}...`);
-
-        } catch (error) {
-            console.error('Error caching try-on result:', error);
-            // If quota exceeded, clear all cache and try again
-            if (error.message && error.message.includes('quota')) {
-                console.warn('⚠️ Storage quota exceeded, clearing all try-on cache...');
-                await chrome.storage.local.set({ tryOnCache: {} });
-            }
-        }
-    }
 }
 
 // Also expose on window for backward compatibility
