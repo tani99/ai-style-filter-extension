@@ -207,46 +207,45 @@ export class VisualIndicators {
         let tryonResult = null;
         let hoverTimeout = null;
 
-        eyeIcon.addEventListener('mouseenter', async () => {
-            // Clear any existing timeout
-            if (hoverTimeout) {
-                clearTimeout(hoverTimeout);
-            }
+        eyeIcon.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
 
-            // Show try-on result after a slight delay (to avoid accidental triggers)
-            hoverTimeout = setTimeout(async () => {
-                console.log(`👁️ Eye icon hovered for image ${index + 1}`);
+            console.log(`👁️ Eye icon clicked for image ${index + 1}`);
 
-                // Only generate if we don't already have a result showing
-                if (!tryonResult) {
-                    tryonResult = await this.handleVirtualTryOn(img, index);
-                }
-            }, 300); // 300ms delay before triggering
-        });
-
-        eyeIcon.addEventListener('mouseleave', () => {
-            // Clear the timeout if user moves away quickly
-            if (hoverTimeout) {
-                clearTimeout(hoverTimeout);
-                hoverTimeout = null;
-            }
-
-            // Hide try-on result when mouse leaves
+            // If already showing result, hide it
             if (tryonResult) {
                 this.hideTryonResult(tryonResult);
                 tryonResult = null;
+                return;
             }
+
+            // Generate or retrieve cached try-on
+            tryonResult = await this.handleVirtualTryOn(img, index);
         });
     }
 
     /**
-     * Handle virtual try-on generation
+     * Handle virtual try-on generation (with caching)
      * @param {HTMLImageElement} img - Product image element
      * @param {number} index - Image index
      * @returns {Promise<HTMLElement>} Try-on result element
      */
     async handleVirtualTryOn(img, index) {
-        console.log(`🎨 Generating virtual try-on for image ${index + 1}`);
+        const cacheKey = this.generateTryonCacheKey(img.src);
+
+        // Check if we have a cached result
+        const cachedResult = await this.getCachedTryonResult(cacheKey);
+
+        if (cachedResult) {
+            console.log(`📦 Using cached try-on for image ${index + 1}`);
+            // Create and display result overlay with cached image
+            const resultOverlay = this.createTryonResultOverlay(img, cachedResult.imageUrl, img.src);
+            document.body.appendChild(resultOverlay);
+            return resultOverlay;
+        }
+
+        console.log(`🎨 Generating new virtual try-on for image ${index + 1}`);
 
         // Create loading overlay
         const loadingOverlay = this.createTryonLoadingOverlay(img);
@@ -278,6 +277,12 @@ export class VisualIndicators {
             console.log('Try-on response:', response);
 
             if (response.success && response.imageUrl) {
+                // Cache the result
+                await this.cacheTryonResult(cacheKey, {
+                    imageUrl: response.imageUrl,
+                    timestamp: Date.now()
+                });
+
                 // Create and display result overlay
                 const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, img.src);
                 document.body.appendChild(resultOverlay);
@@ -1151,6 +1156,88 @@ export class VisualIndicators {
         } catch (error) {
             console.error('Failed to fetch and convert image:', error);
             throw new Error(`Failed to convert image: ${error.message}`);
+        }
+    }
+
+    /**
+     * Generate cache key for try-on results
+     * @param {string} clothingImageUrl - Clothing image URL
+     * @returns {string} Cache key
+     * @private
+     */
+    generateTryonCacheKey(clothingImageUrl) {
+        // Create a simple hash from the URL
+        // Use the URL as-is since it uniquely identifies the clothing item
+        return `tryon_${btoa(clothingImageUrl).substring(0, 50)}`;
+    }
+
+    /**
+     * Get cached try-on result
+     * @param {string} cacheKey - Cache key
+     * @returns {Promise<Object|null>} Cached result or null
+     * @private
+     */
+    async getCachedTryonResult(cacheKey) {
+        try {
+            const result = await chrome.storage.local.get(['tryOnCache']);
+            const cache = result.tryOnCache || {};
+
+            if (cache[cacheKey]) {
+                const cached = cache[cacheKey];
+
+                // Check if cache is expired (24 hours)
+                const now = Date.now();
+                const cacheAge = now - cached.timestamp;
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+                if (cacheAge < maxAge) {
+                    console.log(`📦 Cache hit for key: ${cacheKey.substring(0, 20)}...`);
+                    return cached;
+                } else {
+                    console.log(`⏰ Cache expired for key: ${cacheKey.substring(0, 20)}...`);
+                    // Remove expired cache entry
+                    delete cache[cacheKey];
+                    await chrome.storage.local.set({ tryOnCache: cache });
+                }
+            }
+
+            return null;
+
+        } catch (error) {
+            console.error('Error getting cached try-on:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Cache try-on result
+     * @param {string} cacheKey - Cache key
+     * @param {Object} data - Data to cache
+     * @private
+     */
+    async cacheTryonResult(cacheKey, data) {
+        try {
+            const result = await chrome.storage.local.get(['tryOnCache']);
+            const cache = result.tryOnCache || {};
+
+            // Limit cache size (keep max 20 entries)
+            const cacheKeys = Object.keys(cache);
+            if (cacheKeys.length >= 20) {
+                // Remove oldest entry
+                const oldestKey = cacheKeys.reduce((oldest, key) => {
+                    return cache[key].timestamp < cache[oldest].timestamp ? key : oldest;
+                }, cacheKeys[0]);
+                delete cache[oldestKey];
+                console.log(`🗑️ Removed oldest cache entry: ${oldestKey.substring(0, 20)}...`);
+            }
+
+            cache[cacheKey] = data;
+
+            await chrome.storage.local.set({ tryOnCache: cache });
+            console.log(`💾 Cached try-on result: ${cacheKey.substring(0, 20)}...`);
+
+        } catch (error) {
+            console.error('Error caching try-on result:', error);
         }
     }
 }
