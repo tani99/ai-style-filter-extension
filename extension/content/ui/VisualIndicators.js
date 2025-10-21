@@ -352,29 +352,32 @@ export class VisualIndicators {
         const overlay = document.createElement('div');
         overlay.className = 'ai-style-tryon-overlay';
 
-        // Get the size of the original product image
+        // Get the size of the original product image and scale it up
         const rect = img.getBoundingClientRect();
+        const scaleFactor = 1.5; // Make it 1.5x larger than original
+        const scaledWidth = rect.width * scaleFactor;
+        const scaledHeight = rect.height * scaleFactor;
 
         overlay.style.cssText = `
             position: absolute;
             background: white;
-            border-radius: 8px;
-            padding: 10px;
+            border-radius: 12px;
+            padding: 12px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             z-index: 10001;
             border: 3px solid #10b981;
         `;
 
-        // Create try-on image with same dimensions as original
+        // Create try-on image scaled up from original dimensions
         const tryonImg = document.createElement('img');
         tryonImg.src = tryonImageUrl;
         tryonImg.alt = 'Virtual try-on result';
         tryonImg.setAttribute('data-ai-generated-tryon', 'true'); // Mark as AI-generated
         tryonImg.style.cssText = `
-            width: ${rect.width}px;
-            height: ${rect.height}px;
+            width: ${scaledWidth}px;
+            height: ${scaledHeight}px;
             object-fit: cover;
-            border-radius: 4px;
+            border-radius: 8px;
             display: block;
         `;
 
