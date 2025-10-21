@@ -351,29 +351,34 @@ export class VisualIndicators {
     createTryonResultOverlay(img, tryonImageUrl, originalImageUrl) {
         const overlay = document.createElement('div');
         overlay.className = 'ai-style-tryon-overlay';
+
+        // Get the size of the original product image
+        const rect = img.getBoundingClientRect();
+
         overlay.style.cssText = `
             position: absolute;
             background: white;
             border-radius: 8px;
-            padding: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             z-index: 10001;
-            border: 2px solid #10b981;
+            border: 3px solid #10b981;
         `;
 
-        overlay.innerHTML = `
-            <div style="display: flex; gap: 10px; align-items: flex-start;">
-                <div style="flex: 1; text-align: center;">
-                    <div style="font-weight: 600; color: #374151; font-size: 12px; margin-bottom: 8px;">Original</div>
-                    <img src="${originalImageUrl}" style="max-width: 150px; max-height: 200px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Original clothing" />
-                </div>
-                <div style="flex: 1; text-align: center;">
-                    <div style="font-weight: 600; color: #059669; font-size: 12px; margin-bottom: 8px;">Virtual Try-On</div>
-                    <img src="${tryonImageUrl}" style="max-width: 150px; max-height: 200px; border-radius: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);" alt="Virtual try-on result" />
-                </div>
-            </div>
+        // Create try-on image with same dimensions as original
+        const tryonImg = document.createElement('img');
+        tryonImg.src = tryonImageUrl;
+        tryonImg.alt = 'Virtual try-on result';
+        tryonImg.setAttribute('data-ai-generated-tryon', 'true'); // Mark as AI-generated
+        tryonImg.style.cssText = `
+            width: ${rect.width}px;
+            height: ${rect.height}px;
+            object-fit: cover;
+            border-radius: 4px;
+            display: block;
         `;
 
+        overlay.appendChild(tryonImg);
         this.positionTryonOverlay(overlay, img);
 
         return overlay;

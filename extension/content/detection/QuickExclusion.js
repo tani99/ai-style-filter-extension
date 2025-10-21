@@ -20,6 +20,14 @@ export class QuickExclusion {
      * @returns {Object} Result with passed flag and rejection reason if failed
      */
     quickExclusionCheck(img) {
+        // First check: Exclude AI-generated try-on images
+        if (img.hasAttribute('data-ai-generated-tryon')) {
+            return {
+                passed: false,
+                reason: 'AI-generated virtual try-on image'
+            };
+        }
+
         const src = (img.src || '').toLowerCase();
         const alt = (img.alt || '').toLowerCase();
         const className = (img.className || '').toLowerCase();
