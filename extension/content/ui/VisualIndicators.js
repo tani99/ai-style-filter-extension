@@ -368,6 +368,49 @@ export class VisualIndicators {
             border: 3px solid #10b981;
         `;
 
+        // Create close button
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '×';
+        closeButton.setAttribute('aria-label', 'Close try-on preview');
+        closeButton.style.cssText = `
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: none;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            transition: all 0.2s ease;
+            font-weight: bold;
+            padding: 0;
+        `;
+
+        // Close button hover effect
+        closeButton.addEventListener('mouseenter', () => {
+            closeButton.style.background = 'rgba(220, 38, 38, 1)';
+            closeButton.style.transform = 'scale(1.1)';
+        });
+
+        closeButton.addEventListener('mouseleave', () => {
+            closeButton.style.background = 'rgba(239, 68, 68, 0.9)';
+            closeButton.style.transform = 'scale(1)';
+        });
+
+        // Close button click handler
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.hideTryonResult(overlay);
+        });
+
         // Create try-on image scaled up from original dimensions
         const tryonImg = document.createElement('img');
         tryonImg.src = tryonImageUrl;
@@ -381,8 +424,19 @@ export class VisualIndicators {
             display: block;
         `;
 
+        overlay.appendChild(closeButton);
         overlay.appendChild(tryonImg);
         this.positionTryonOverlay(overlay, img);
+
+        // Auto-close after 5 seconds
+        const autoCloseTimeout = setTimeout(() => {
+            if (overlay.parentNode) {
+                this.hideTryonResult(overlay);
+            }
+        }, 5000);
+
+        // Store timeout ID so it can be cleared if manually closed
+        overlay.dataset.autoCloseTimeout = autoCloseTimeout;
 
         return overlay;
     }
@@ -438,6 +492,10 @@ export class VisualIndicators {
      */
     hideTryonResult(overlay) {
         if (overlay && overlay.parentNode) {
+            // Clear auto-close timeout if it exists
+            if (overlay.dataset.autoCloseTimeout) {
+                clearTimeout(parseInt(overlay.dataset.autoCloseTimeout));
+            }
             overlay.remove();
         }
     }
