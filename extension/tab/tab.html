@@ -124,6 +124,26 @@
                         </p>
                     </div>
 
+                    <!-- Try-On Photo Upload Section -->
+                    <div class="tryon-photo-section" id="tryonPhotoSection" style="display: none;">
+                        <h3>Your Try-On Photo</h3>
+                        <p>Upload a single photo of yourself that will be used for virtual try-on on shopping sites</p>
+
+                        <div class="tryon-photo-upload-area" id="tryonPhotoUploadArea">
+                            <div class="tryon-photo-placeholder" id="tryonPhotoPlaceholder">
+                                <span class="upload-icon">📸</span>
+                                <p>Click to upload your try-on photo</p>
+                                <small>JPG, PNG, WebP (Max 5MB)</small>
+                            </div>
+                            <input type="file" id="tryonPhotoInput" accept="image/jpeg,image/jpg,image/png,image/webp" style="display: none;">
+                        </div>
+
+                        <div class="tryon-photo-preview" id="tryonPhotoPreview" style="display: none;">
+                            <img id="tryonPhotoImage" alt="Your try-on photo" />
+                            <button id="removeTryonPhotoBtn" class="remove-tryon-photo-btn">Remove Photo</button>
+                        </div>
+                    </div>
+
                     <div class="tryon-test" id="tryonTestSection" style="display: none;">
                         <h3>Test Virtual Try-On</h3>
                         <p>Upload a clothing image to test how it would look on you</p>

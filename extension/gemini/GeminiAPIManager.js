@@ -157,12 +157,22 @@ class GeminiAPIManager {
             const userPhotoData = this.cleanBase64Image(userPhoto);
             const clothingImageData = this.cleanBase64Image(clothingImage);
 
+            // Validate that we have actual data
+            if (!userPhotoData || userPhotoData.length === 0) {
+                throw new Error('User photo data is empty or invalid');
+            }
+            if (!clothingImageData || clothingImageData.length === 0) {
+                throw new Error('Clothing image data is empty or invalid');
+            }
+
             // Detect MIME types from data URLs or default to jpeg
             const userPhotoMimeType = this.detectMimeType(userPhoto);
             const clothingImageMimeType = this.detectMimeType(clothingImage);
 
             console.log('🖼️ User photo MIME type:', userPhotoMimeType);
             console.log('🖼️ Clothing image MIME type:', clothingImageMimeType);
+            console.log('🖼️ User photo data length:', userPhotoData.length);
+            console.log('🖼️ Clothing image data length:', clothingImageData.length);
 
             // Create prompt for virtual try-on IMAGE GENERATION
             const prompt = this.createImageGenerationPrompt(options);
@@ -366,14 +376,7 @@ class GeminiAPIManager {
     // Create prompt for image generation virtual try-on
     // Following Gemini API docs: "Describe the scene, don't just list keywords"
     createImageGenerationPrompt(options = {}) {
-        return `The first image is an image of me. generate an image of me wearing the clothing item in the second image`
-//         `Create a photorealistic fashion photograph showing the person from the first image wearing the clothing item from the second image.
-
-// The person should be positioned in a natural, flattering pose against a clean, neutral background. Their facial features, skin tone, hair, and body proportions must remain exactly as shown in the first image.
-
-// Take the clothing item from the second image and place it on the person with realistic fit and draping that matches their body type. The clothing's color, pattern, texture, and style details must be preserved exactly as they appear in the second image. Ensure the garment sits naturally on the body with appropriate wrinkles, shadows, and fabric behavior.
-
-// The lighting should be soft and even, similar to professional studio photography, creating natural shadows that enhance the three-dimensional quality of both the person and the clothing. The overall composition should look like a high-quality fashion e-commerce product photo, where you can clearly see how the clothing item looks when worn by this specific person.`;
+        return `The first image is an image of me. Generate an image of me wearing the clothing item in the second image.`;
     }
 
     // Create prompt for virtual try-on analysis (text-based)

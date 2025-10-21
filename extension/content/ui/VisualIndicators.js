@@ -50,6 +50,13 @@ export class VisualIndicators {
         const overlay = this.createDetectedOverlay();
         this.positionOverlay(overlay, img);
 
+        // Create eye icon overlay for virtual try-on
+        const eyeIcon = this.createEyeIconOverlay();
+        this.positionEyeIcon(eyeIcon, img);
+
+        // Attach try-on handler to eye icon
+        this.attachTryonHandler(eyeIcon, img, index);
+
         // Set data attributes
         img.dataset.aiStyleDetected = 'true';
         img.dataset.aiStyleIndex = index;
@@ -57,12 +64,13 @@ export class VisualIndicators {
         // Add tooltip
         img.title = `Detected clothing item ${index + 1}`;
 
-        // Insert overlay into document
+        // Insert overlay and eye icon into document
         document.body.appendChild(overlay);
+        document.body.appendChild(eyeIcon);
 
         // Store references and setup position updates
-        this.trackOverlay(img, overlay, null, index);
-        this.setupPositionUpdates(img, overlay);
+        this.trackOverlay(img, overlay, null, index, eyeIcon);
+        this.setupPositionUpdates(img, overlay, eyeIcon);
 
         console.log(`✅ Added indicator for detected image ${index + 1}`);
     }
@@ -145,6 +153,303 @@ export class VisualIndicators {
     }
 
     /**
+     * Create eye icon overlay for virtual try-on
+     * @returns {HTMLElement} Eye icon element
+     */
+    createEyeIconOverlay() {
+        const eyeIcon = document.createElement('div');
+        eyeIcon.className = 'ai-style-eye-icon';
+        eyeIcon.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 5C7 5 2.73 8.11 1 12.5C2.73 16.89 7 20 12 20C17 20 21.27 16.89 23 12.5C21.27 8.11 17 5 12 5ZM12 17.5C9.24 17.5 7 15.26 7 12.5C7 9.74 9.24 7.5 12 7.5C14.76 7.5 17 9.74 17 12.5C17 15.26 14.76 17.5 12 17.5ZM12 9.5C10.34 9.5 9 10.84 9 12.5C9 14.16 10.34 15.5 12 15.5C13.66 15.5 15 14.16 15 12.5C15 10.84 13.66 9.5 12 9.5Z" fill="white"/>
+            </svg>
+        `;
+        eyeIcon.style.cssText = `
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(16, 185, 129, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10000;
+            pointer-events: auto;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            opacity: 0;
+        `;
+        eyeIcon.dataset.aiStyleEyeIcon = 'true';
+        eyeIcon.title = 'Hover to preview virtual try-on';
+
+        // Hover effects for animation
+        eyeIcon.addEventListener('mouseenter', () => {
+            eyeIcon.style.transform = 'scale(1.1)';
+            eyeIcon.style.background = 'rgba(16, 185, 129, 1)';
+        });
+
+        eyeIcon.addEventListener('mouseleave', () => {
+            eyeIcon.style.transform = 'scale(1)';
+            eyeIcon.style.background = 'rgba(16, 185, 129, 0.9)';
+        });
+
+        return eyeIcon;
+    }
+
+    /**
+     * Attach virtual try-on handler to eye icon
+     * @param {HTMLElement} eyeIcon - Eye icon element
+     * @param {HTMLImageElement} img - Product image element
+     * @param {number} index - Image index
+     */
+    attachTryonHandler(eyeIcon, img, index) {
+        let tryonResult = null;
+        let hoverTimeout = null;
+
+        eyeIcon.addEventListener('mouseenter', async () => {
+            // Clear any existing timeout
+            if (hoverTimeout) {
+                clearTimeout(hoverTimeout);
+            }
+
+            // Show try-on result after a slight delay (to avoid accidental triggers)
+            hoverTimeout = setTimeout(async () => {
+                console.log(`👁️ Eye icon hovered for image ${index + 1}`);
+
+                // Only generate if we don't already have a result showing
+                if (!tryonResult) {
+                    tryonResult = await this.handleVirtualTryOn(img, index);
+                }
+            }, 300); // 300ms delay before triggering
+        });
+
+        eyeIcon.addEventListener('mouseleave', () => {
+            // Clear the timeout if user moves away quickly
+            if (hoverTimeout) {
+                clearTimeout(hoverTimeout);
+                hoverTimeout = null;
+            }
+
+            // Hide try-on result when mouse leaves
+            if (tryonResult) {
+                this.hideTryonResult(tryonResult);
+                tryonResult = null;
+            }
+        });
+    }
+
+    /**
+     * Handle virtual try-on generation
+     * @param {HTMLImageElement} img - Product image element
+     * @param {number} index - Image index
+     * @returns {Promise<HTMLElement>} Try-on result element
+     */
+    async handleVirtualTryOn(img, index) {
+        console.log(`🎨 Generating virtual try-on for image ${index + 1}`);
+
+        // Create loading overlay
+        const loadingOverlay = this.createTryonLoadingOverlay(img);
+        document.body.appendChild(loadingOverlay);
+
+        try {
+            // Get the try-on photo from storage
+            const result = await chrome.storage.local.get(['tryonPhoto']);
+
+            if (!result.tryonPhoto) {
+                throw new Error('No try-on photo uploaded. Please upload a try-on photo in the extension settings.');
+            }
+
+            // Convert the clothing image URL to base64
+            console.log('📥 Fetching clothing image from:', img.src);
+            const clothingImageBase64 = await this.convertImageToBase64(img.src);
+            console.log('✅ Clothing image converted to base64');
+
+            // Send message to background script to generate try-on
+            const response = await chrome.runtime.sendMessage({
+                action: 'generateTryOn',
+                userPhoto: result.tryonPhoto,
+                clothingImage: clothingImageBase64,
+                options: {
+                    temperature: 0.7
+                }
+            });
+
+            console.log('Try-on response:', response);
+
+            if (response.success && response.imageUrl) {
+                // Create and display result overlay
+                const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, img.src);
+                document.body.appendChild(resultOverlay);
+
+                // Remove loading overlay
+                loadingOverlay.remove();
+
+                return resultOverlay;
+            } else {
+                throw new Error(response.error || 'Failed to generate try-on');
+            }
+
+        } catch (error) {
+            console.error('Virtual try-on error:', error);
+
+            // Show error overlay
+            const errorOverlay = this.createTryonErrorOverlay(img, error.message);
+            document.body.appendChild(errorOverlay);
+
+            // Remove loading overlay
+            loadingOverlay.remove();
+
+            return errorOverlay;
+        }
+    }
+
+    /**
+     * Create loading overlay for try-on generation
+     * @param {HTMLImageElement} img - Product image element
+     * @returns {HTMLElement} Loading overlay element
+     */
+    createTryonLoadingOverlay(img) {
+        const overlay = document.createElement('div');
+        overlay.className = 'ai-style-tryon-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+        `;
+
+        overlay.innerHTML = `
+            <div style="width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div style="color: #059669; font-weight: 600; font-size: 14px;">Generating try-on...</div>
+        `;
+
+        this.positionTryonOverlay(overlay, img);
+
+        return overlay;
+    }
+
+    /**
+     * Create result overlay for try-on
+     * @param {HTMLImageElement} img - Product image element
+     * @param {string} tryonImageUrl - Generated try-on image URL
+     * @param {string} originalImageUrl - Original clothing image URL
+     * @returns {HTMLElement} Result overlay element
+     */
+    createTryonResultOverlay(img, tryonImageUrl, originalImageUrl) {
+        const overlay = document.createElement('div');
+        overlay.className = 'ai-style-tryon-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 10001;
+            border: 2px solid #10b981;
+        `;
+
+        overlay.innerHTML = `
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="flex: 1; text-align: center;">
+                    <div style="font-weight: 600; color: #374151; font-size: 12px; margin-bottom: 8px;">Original</div>
+                    <img src="${originalImageUrl}" style="max-width: 150px; max-height: 200px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Original clothing" />
+                </div>
+                <div style="flex: 1; text-align: center;">
+                    <div style="font-weight: 600; color: #059669; font-size: 12px; margin-bottom: 8px;">Virtual Try-On</div>
+                    <img src="${tryonImageUrl}" style="max-width: 150px; max-height: 200px; border-radius: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);" alt="Virtual try-on result" />
+                </div>
+            </div>
+        `;
+
+        this.positionTryonOverlay(overlay, img);
+
+        return overlay;
+    }
+
+    /**
+     * Create error overlay for try-on
+     * @param {HTMLImageElement} img - Product image element
+     * @param {string} errorMessage - Error message
+     * @returns {HTMLElement} Error overlay element
+     */
+    createTryonErrorOverlay(img, errorMessage) {
+        const overlay = document.createElement('div');
+        overlay.className = 'ai-style-tryon-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 10001;
+            border: 2px solid #ef4444;
+            max-width: 300px;
+        `;
+
+        overlay.innerHTML = `
+            <div style="color: #991b1b; font-weight: 600; font-size: 14px; margin-bottom: 8px;">❌ Try-On Failed</div>
+            <div style="color: #6b7280; font-size: 12px;">${errorMessage}</div>
+        `;
+
+        this.positionTryonOverlay(overlay, img);
+
+        return overlay;
+    }
+
+    /**
+     * Position try-on overlay relative to image
+     * @param {HTMLElement} overlay - Overlay element
+     * @param {HTMLImageElement} img - Product image element
+     */
+    positionTryonOverlay(overlay, img) {
+        const rect = img.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+        // Position to the right of the image
+        overlay.style.top = `${rect.top + scrollTop}px`;
+        overlay.style.left = `${rect.right + scrollLeft + 10}px`;
+    }
+
+    /**
+     * Hide try-on result overlay
+     * @param {HTMLElement} overlay - Overlay element to hide
+     */
+    hideTryonResult(overlay) {
+        if (overlay && overlay.parentNode) {
+            overlay.remove();
+        }
+    }
+
+    /**
+     * Position eye icon at the bottom right of image, below the image
+     * @param {HTMLElement} eyeIcon - Eye icon element
+     * @param {HTMLImageElement} img - Target image element
+     */
+    positionEyeIcon(eyeIcon, img) {
+        const rect = img.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+        // Position at bottom right corner, slightly outside the image
+        eyeIcon.style.top = `${rect.bottom + scrollTop + 5}px`;
+        eyeIcon.style.left = `${rect.right + scrollLeft - 45}px`;
+
+        // Fade in animation
+        setTimeout(() => {
+            eyeIcon.style.opacity = '1';
+        }, 100);
+    }
+
+    /**
      * Position overlay relative to image element
      * @param {HTMLElement} overlay - Overlay element
      * @param {HTMLImageElement} img - Target image element
@@ -159,11 +464,13 @@ export class VisualIndicators {
      * @param {HTMLElement} overlay - Main overlay element
      * @param {HTMLElement|null} scoreBadge - Score badge element (unused, kept for compatibility)
      * @param {number} index - Image index
+     * @param {HTMLElement|null} eyeIcon - Eye icon element for virtual try-on
      */
-    trackOverlay(img, overlay, scoreBadge, index) {
+    trackOverlay(img, overlay, scoreBadge, index, eyeIcon = null) {
         const overlayData = {
             overlay,
             scoreBadge: null, // No score badges anymore
+            eyeIcon,
             index,
             img
         };
@@ -173,15 +480,25 @@ export class VisualIndicators {
         // Set data attributes for cleanup
         overlay.dataset.aiStyleOverlay = 'detected';
         overlay.dataset.aiStyleTargetIndex = index;
+
+        if (eyeIcon) {
+            eyeIcon.dataset.aiStyleTargetIndex = index;
+        }
     }
 
     /**
      * Setup position update event handlers
      * @param {HTMLImageElement} img - Image element
      * @param {HTMLElement} overlay - Main overlay element
+     * @param {HTMLElement|null} eyeIcon - Eye icon element
      */
-    setupPositionUpdates(img, overlay) {
-        const updatePosition = () => this.positionOverlay(overlay, img);
+    setupPositionUpdates(img, overlay, eyeIcon = null) {
+        const updatePosition = () => {
+            this.positionOverlay(overlay, img);
+            if (eyeIcon) {
+                this.positionEyeIcon(eyeIcon, img);
+            }
+        };
 
         // Store handlers for cleanup
         const handlers = { updatePosition };
@@ -577,6 +894,11 @@ export class VisualIndicators {
                 overlayData.scoreBadge.remove();
             }
 
+            // Remove eye icon if exists
+            if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
+                overlayData.eyeIcon.remove();
+            }
+
             // Remove event handlers
             const handlers = this.updateHandlers.get(img);
             if (handlers) {
@@ -616,6 +938,11 @@ export class VisualIndicators {
         const scoreBadges = document.querySelectorAll('[data-ai-style-score-badge], .ai-style-score-badge');
         console.log(`   Removing ${scoreBadges.length} score badges`);
         scoreBadges.forEach(badge => badge.remove());
+
+        // Remove all eye icons
+        const eyeIcons = document.querySelectorAll('[data-ai-style-eye-icon], .ai-style-eye-icon');
+        console.log(`   Removing ${eyeIcons.length} eye icons`);
+        eyeIcons.forEach(icon => icon.remove());
 
         // Clear all event handlers
         this.updateHandlers.forEach((handlers, img) => {
@@ -795,6 +1122,36 @@ export class VisualIndicators {
         });
 
         console.log('✅ Filter effects cleared via data attributes');
+    }
+
+    /**
+     * Convert image URL to base64 data URL
+     * Uses background script to bypass CORS restrictions
+     * @param {string} imageUrl - Image URL to convert
+     * @returns {Promise<string>} Base64 data URL
+     * @private
+     */
+    async convertImageToBase64(imageUrl) {
+        try {
+            console.log('🔄 Requesting background script to fetch image...');
+
+            // Send message to background script to fetch image with extension permissions
+            const response = await chrome.runtime.sendMessage({
+                action: 'fetchImageAsBase64',
+                imageUrl: imageUrl
+            });
+
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to fetch image');
+            }
+
+            console.log('✅ Image fetched and converted to base64 by background script');
+            return response.dataUrl;
+
+        } catch (error) {
+            console.error('Failed to fetch and convert image:', error);
+            throw new Error(`Failed to convert image: ${error.message}`);
+        }
     }
 }
 

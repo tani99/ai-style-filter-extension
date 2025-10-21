@@ -11,6 +11,7 @@ async function checkGeminiAPIStatus() {
     const statusElement = document.getElementById('geminiStatus');
     const apiKeySetup = document.getElementById('apiKeySetup');
     const tryonTestSection = document.getElementById('tryonTestSection');
+    const tryonPhotoSection = document.getElementById('tryonPhotoSection');
 
     if (!statusElement) return;
 
@@ -26,17 +27,23 @@ async function checkGeminiAPIStatus() {
             statusElement.textContent = 'Ready';
             statusElement.className = 'status-indicator ready';
             if (apiKeySetup) apiKeySetup.style.display = 'none';
+            if (tryonPhotoSection) tryonPhotoSection.style.display = 'block';
             if (tryonTestSection) tryonTestSection.style.display = 'block';
+
+            // Load saved try-on photo if exists
+            loadTryonPhoto();
         } else if (response.configured && !response.valid) {
             statusElement.textContent = 'Invalid Key';
             statusElement.className = 'status-indicator error';
             if (apiKeySetup) apiKeySetup.style.display = 'block';
+            if (tryonPhotoSection) tryonPhotoSection.style.display = 'none';
             if (tryonTestSection) tryonTestSection.style.display = 'none';
             showNotification('Gemini API key is invalid. Please update it.', 'error');
         } else {
             statusElement.textContent = 'Not Configured';
             statusElement.className = 'status-indicator error';
             if (apiKeySetup) apiKeySetup.style.display = 'block';
+            if (tryonPhotoSection) tryonPhotoSection.style.display = 'none';
             if (tryonTestSection) tryonTestSection.style.display = 'none';
         }
 
@@ -384,6 +391,171 @@ function readFileAsDataURL(file) {
     });
 }
 
+// Image compression function (reused from tab.js)
+async function compressImage(file, maxSize) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        img.onload = function() {
+            // Calculate new dimensions while maintaining aspect ratio
+            let { width, height } = img;
+            const maxDimension = 1200; // Max width or height
+
+            if (width > height) {
+                if (width > maxDimension) {
+                    height = (height * maxDimension) / width;
+                    width = maxDimension;
+                }
+            } else {
+                if (height > maxDimension) {
+                    width = (width * maxDimension) / height;
+                    height = maxDimension;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            // Draw and compress
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Try different quality levels until we get under maxSize
+            let quality = 0.8;
+            let dataUrl;
+
+            const tryCompress = () => {
+                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                const size = Math.round((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3/4);
+
+                if (size <= maxSize || quality <= 0.1) {
+                    resolve(dataUrl);
+                } else {
+                    quality -= 0.1;
+                    setTimeout(tryCompress, 10);
+                }
+            };
+
+            tryCompress();
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+// Format file size for display
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// ========================================
+// Try-On Photo Management Functions
+// ========================================
+
+// Load saved try-on photo
+async function loadTryonPhoto() {
+    try {
+        const result = await chrome.storage.local.get(['tryonPhoto']);
+
+        if (result.tryonPhoto) {
+            displayTryonPhoto(result.tryonPhoto);
+        }
+    } catch (error) {
+        console.error('Failed to load try-on photo:', error);
+    }
+}
+
+// Display try-on photo
+function displayTryonPhoto(photoData) {
+    const placeholder = document.getElementById('tryonPhotoPlaceholder');
+    const preview = document.getElementById('tryonPhotoPreview');
+    const image = document.getElementById('tryonPhotoImage');
+
+    if (placeholder && preview && image) {
+        placeholder.style.display = 'none';
+        preview.style.display = 'block';
+        image.src = photoData;
+    }
+}
+
+// Handle try-on photo upload
+async function handleTryonPhotoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const maxSize = 20 * 1024 * 1024; // 20MB (Gemini API limit)
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+    // Validate file type
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+        showNotification('Please upload a JPG, PNG, or WebP image', 'error');
+        return;
+    }
+
+    try {
+        let photoData;
+
+        // Compress image if it's too large
+        if (file.size > maxSize) {
+            showNotification(`Image is large (${formatFileSize(file.size)}) - compressing...`, 'info');
+            try {
+                photoData = await compressImage(file, maxSize);
+                showNotification('Try-on photo compressed and uploaded successfully!', 'success');
+            } catch (error) {
+                console.error('Failed to compress image:', error);
+                showNotification('Image is too large and compression failed. Please try a smaller image.', 'error');
+                return;
+            }
+        } else {
+            // Read the file without compression
+            photoData = await readFileAsDataURL(file);
+            showNotification('Try-on photo uploaded successfully!', 'success');
+        }
+
+        // Save to storage
+        await chrome.storage.local.set({ tryonPhoto: photoData });
+
+        // Display the photo
+        displayTryonPhoto(photoData);
+
+    } catch (error) {
+        console.error('Failed to upload try-on photo:', error);
+        showNotification('Failed to upload photo: ' + error.message, 'error');
+    }
+}
+
+// Remove try-on photo
+async function removeTryonPhoto() {
+    try {
+        // Remove from storage
+        await chrome.storage.local.remove(['tryonPhoto']);
+
+        // Update UI
+        const placeholder = document.getElementById('tryonPhotoPlaceholder');
+        const preview = document.getElementById('tryonPhotoPreview');
+        const image = document.getElementById('tryonPhotoImage');
+        const input = document.getElementById('tryonPhotoInput');
+
+        if (placeholder && preview && image && input) {
+            placeholder.style.display = 'flex';
+            preview.style.display = 'none';
+            image.src = '';
+            input.value = '';
+        }
+
+        showNotification('Try-on photo removed', 'info');
+    } catch (error) {
+        console.error('Failed to remove try-on photo:', error);
+        showNotification('Failed to remove photo: ' + error.message, 'error');
+    }
+}
+
 // Helper function to get stored photos (needs to be available)
 async function getStoredPhotos() {
     const result = await chrome.storage.local.get(['userPhotos']);
@@ -453,6 +625,22 @@ function initializeGeminiUI() {
                 showAPIKeyBtn.textContent = '👁️';
             }
         });
+    }
+
+    // Event listeners for try-on photo upload
+    const tryonPhotoUploadArea = document.getElementById('tryonPhotoUploadArea');
+    const tryonPhotoInput = document.getElementById('tryonPhotoInput');
+    const removeTryonPhotoBtn = document.getElementById('removeTryonPhotoBtn');
+
+    if (tryonPhotoUploadArea && tryonPhotoInput) {
+        tryonPhotoUploadArea.addEventListener('click', () => {
+            tryonPhotoInput.click();
+        });
+        tryonPhotoInput.addEventListener('change', handleTryonPhotoUpload);
+    }
+
+    if (removeTryonPhotoBtn) {
+        removeTryonPhotoBtn.addEventListener('click', removeTryonPhoto);
     }
 
     // Event listeners for try-on functionality

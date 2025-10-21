@@ -155,6 +155,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({status: 'acknowledged'});
             break;
 
+        case 'fetchImageAsBase64':
+            // Fetch image with extension permissions and convert to base64
+            fetchImageAsBase64(request.imageUrl).then(result => {
+                sendResponse(result);
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+            return true; // Keep message channel open for async response
+
         case 'generateTryOn':
             geminiManager.generateTryOn(request.userPhoto, request.clothingImage, request.options).then(result => {
                 sendResponse(result);
@@ -1677,6 +1686,47 @@ async function checkChromeAIAvailability() {
     }
 }
 
+// Fetch image and convert to base64 (bypasses CORS with extension permissions)
+async function fetchImageAsBase64(imageUrl) {
+    try {
+        console.log(`[Background] Fetching image for content script: ${imageUrl}`);
+
+        // Fetch the image using extension permissions
+        const response = await fetch(imageUrl);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        }
+
+        // Convert to blob
+        const blob = await response.blob();
+        console.log(`[Background] Image fetched: ${blob.size} bytes, ${blob.type}`);
+
+        // Convert blob to base64
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onloadend = () => {
+                console.log('[Background] Image converted to base64');
+                resolve({
+                    success: true,
+                    dataUrl: reader.result
+                });
+            };
+
+            reader.onerror = (error) => {
+                console.error('[Background] Failed to convert blob to base64:', error);
+                reject(new Error('Failed to convert image to base64'));
+            };
+
+            reader.readAsDataURL(blob);
+        });
+
+    } catch (error) {
+        console.error('[Background] Error fetching image:', error);
+        throw error;
+    }
+}
 
 // Gemini API functions have been moved to gemini/GeminiAPIManager.js
 // and are accessed via the geminiManager instance
