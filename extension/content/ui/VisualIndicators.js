@@ -598,8 +598,10 @@ export class VisualIndicators {
 
         // Set highlight attribute for high scores (8-10)
         if (score >= 8) {
+            console.log(`   ✨ Setting highlighted=true for score ${score} (type: ${typeof score})`);
             overlayData.overlay.dataset.aiHighlighted = 'true';
         } else {
+            console.log(`   Setting highlighted=false for score ${score} (type: ${typeof score})`);
             overlayData.overlay.dataset.aiHighlighted = 'false';
         }
 
@@ -1047,8 +1049,10 @@ export class VisualIndicators {
 
             // Update highlight attribute for high scores (CSS will handle the styling)
             if (overlayData.score >= 8 && mode === 'myStyle') {
+                console.log(`   ✨ applyFilterEffects: Setting highlighted=true for score ${overlayData.score} (type: ${typeof overlayData.score}), mode=${mode}`);
                 overlayData.overlay.dataset.aiHighlighted = 'true';
             } else {
+                console.log(`   applyFilterEffects: Setting highlighted=false for score ${overlayData.score} (type: ${typeof overlayData.score}), mode=${mode}`);
                 overlayData.overlay.dataset.aiHighlighted = 'false';
             }
         });
