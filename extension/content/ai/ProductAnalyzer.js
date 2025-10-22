@@ -151,7 +151,7 @@ export class ProductAnalyzer {
 
             // Create AI session (using official Prompt API - exactly as documented)
             console.log('🤖 Creating LanguageModel session for this analysis...');
-            const session = await window.xLanguageModel.create({
+            const session = await window.LanguageModel.create({
                 temperature: 0.3,  // Slightly higher for varied scoring
                 topK: 5
             });
