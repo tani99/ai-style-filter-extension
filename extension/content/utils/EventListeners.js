@@ -174,6 +174,36 @@ export class EventListeners {
                     }
                     break;
 
+                case 'applyPrompt':
+                    // Handle prompt mode activation
+                    if (request.prompt) {
+                        console.log('📩 Applying prompt from popup:', request.prompt);
+                        this.contentScript.handleApplyPrompt(request.prompt).then(() => {
+                            sendResponse({status: 'prompt_applied'});
+                        }).catch(error => {
+                            console.error('Error applying prompt:', error);
+                            sendResponse({status: 'error', message: error.message});
+                        });
+                        return true; // Keep message channel open for async response
+                    } else {
+                        sendResponse({
+                            status: 'missing_parameter',
+                            message: 'prompt parameter required'
+                        });
+                    }
+                    break;
+
+                case 'switchToStyleMode':
+                    // Handle switch back to style mode
+                    console.log('📩 Switching to style mode from popup');
+                    this.contentScript.handleSwitchToStyleMode().then(() => {
+                        sendResponse({status: 'switched_to_style_mode'});
+                    }).catch(error => {
+                        console.error('Error switching to style mode:', error);
+                        sendResponse({status: 'error', message: error.message});
+                    });
+                    return true; // Keep message channel open for async response
+
                 default:
                     sendResponse({status: 'unknown_action'});
             }

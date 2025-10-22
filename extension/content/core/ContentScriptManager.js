@@ -214,9 +214,8 @@ export class ContentScriptManager {
             this.handleNewImagesDetected();
         });
 
-        this.eventListeners.setupMessageListeners((message) => {
-            this.handleMessage(message);
-        });
+        // EventListeners handles message setup directly
+        this.eventListeners.setupMessageListeners();
     }
 
     /**
@@ -1016,50 +1015,7 @@ export class ContentScriptManager {
         await this.detectNewImages();
     }
 
-    /**
-     * Handle messages from background script or popup
-     * @param {Object} message - Message object
-     * @private
-     */
-    handleMessage(message) {
-        switch (message.action) {
-            case 'detectProducts':
-                this.detectProductImages();
-                break;
-            case 'clearDetection':
-                this.clearProductDetection();
-                break;
-            case 'enableDebug':
-                this.enableDebugMode();
-                break;
-            case 'disableDebug':
-                this.disableDebugMode();
-                break;
-            case 'getStats':
-                return this.getDetectionStats();
-            case 'updateFilterState':
-                // Handle filter state updates from popup
-                if (message.filterState) {
-                    console.log('📩 Received filter state from popup:', message.filterState);
-                    this.filterStateManager.updateFilterState(message.filterState);
-                }
-                break;
-            case 'applyPrompt':
-                // Handle prompt mode activation
-                if (message.prompt) {
-                    console.log('📩 Applying prompt from popup:', message.prompt);
-                    this.handleApplyPrompt(message.prompt);
-                }
-                break;
-            case 'switchToStyleMode':
-                // Handle switch back to style mode
-                console.log('📩 Switching to style mode from popup');
-                this.handleSwitchToStyleMode();
-                break;
-            default:
-                console.log('Unknown message:', message);
-        }
-    }
+    // Message handling moved to EventListeners.js for centralized management
 
     /**
      * Handle filter state changes from FilterStateManager

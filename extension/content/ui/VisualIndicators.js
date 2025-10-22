@@ -532,7 +532,9 @@ export class VisualIndicators {
 
     /**
      * Add score overlay to a detected product image
-     * Shows compatibility score (1-10) with color-coded badge
+     * Shows compatibility score (1-10) with visual styling
+     * 9-10: Perfect match badge, normal appearance
+     * 1-8: Greyed out
      * @param {HTMLImageElement} img - Image element
      * @param {number} score - Compatibility score (1-10)
      * @param {string} reasoning - Analysis reasoning
@@ -570,7 +572,7 @@ export class VisualIndicators {
             badge.remove();
         });
 
-        // Create score badge
+        // Create score badge (for all scores during testing)
         console.log('   Creating score badge...');
         const scoreBadge = this.createScoreBadge(score, reasoning);
         console.log('   Score badge created:', scoreBadge);
@@ -596,18 +598,33 @@ export class VisualIndicators {
         overlayData.score = score;
         overlayData.reasoning = reasoning;
 
-        // Set highlight attribute for high scores (8-10)
-        if (score >= 8) {
-            console.log(`   ✨ Setting highlighted=true for score ${score} (type: ${typeof score})`);
+        // Apply visual styling based on score
+        if (score >= 9) {
+            // Perfect match (9-10): normal appearance with badge
+            console.log(`   ✨ Score ${score}/10 - Perfect match with badge`);
+            overlayData.overlay.dataset.aiScore = score;
             overlayData.overlay.dataset.aiHighlighted = 'true';
-        } else {
-            console.log(`   Setting highlighted=false for score ${score} (type: ${typeof score})`);
+            img.style.opacity = '1';
+            img.style.filter = 'none';
+        } else if (score >= 7) {
+            // Good match (7-8): normal appearance with score badge
+            console.log(`   ✅ Score ${score}/10 - Good match, normal visibility`);
+            overlayData.overlay.dataset.aiScore = score;
             overlayData.overlay.dataset.aiHighlighted = 'false';
+            img.style.opacity = '1';
+            img.style.filter = 'none';
+        } else {
+            // Low score (1-6): greyed out
+            console.log(`   ⚫ Score ${score}/10 - Low score, greyed out`);
+            overlayData.overlay.dataset.aiScore = score;
+            overlayData.overlay.dataset.aiHighlighted = 'false';
+            img.style.opacity = '0.3';
+            img.style.filter = 'grayscale(100%)';
         }
 
         // Update image attributes
         img.dataset.aiStyleScore = score;
-        img.title = `Score: ${score}/10 - ${reasoning}`;
+        img.title = `Score ${score}/10 - ${reasoning}`;
 
         // Set filter state attributes for CSS reactivity
         if (this.filterStateManager) {
@@ -641,6 +658,7 @@ export class VisualIndicators {
 
     /**
      * Create score badge element
+     * Shows score for all products during testing
      * @param {number} score - Compatibility score (1-10)
      * @param {string} reasoning - Analysis reasoning
      * @returns {HTMLElement} Score badge element
@@ -649,88 +667,108 @@ export class VisualIndicators {
         const badge = document.createElement('div');
         badge.className = 'ai-style-score-badge';
 
-        // Determine color and content based on score
-        let backgroundColor, textColor, badgeContent;
+        // Determine color based on score
+        let backgroundColor, textColor, borderColor;
         if (score >= 9) {
-            // Perfect match: cute yellow badge at top center with sparkle
+            // Perfect match: gold
+            backgroundColor = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
+            textColor = '#78350f';
+            borderColor = '#fef3c7';
+            badge.dataset.aiStyleScoreBadge = 'perfect';
+
+            // Perfect match gets sparkle animation
             badge.style.cssText = `
                 position: absolute;
-                background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-                color: #78350f;
+                background: ${backgroundColor};
+                color: ${textColor};
                 font-weight: 800;
-                font-size: 11px;
+                font-size: 14px;
                 padding: 4px 10px;
-                border-radius: 12px;
+                border-radius: 8px;
                 box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4), 0 0 15px rgba(251, 191, 36, 0.3);
                 z-index: 9999;
                 pointer-events: auto;
                 cursor: help;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 text-align: center;
-                display: flex;
-                align-items: center;
-                gap: 3px;
-                border: 2px solid #fef3c7;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
+                border: 2px solid ${borderColor};
                 animation: perfectMatchPulse 2s ease-in-out infinite;
             `;
-
-            // Add sparkle emoji and text
-            badge.innerHTML = `
-                <span style="font-size: 12px;">✨</span>
-                <span style="font-weight: 800;">Perfect Match</span>
-                <span style="font-size: 12px;">✨</span>
-            `;
-            badge.title = `${score}/10 - ${reasoning}`;
-            badge.dataset.aiStyleScoreBadge = 'perfect';
-
-            // Add animation keyframes if not already added
             this.ensurePerfectMatchAnimation();
-
-            return badge;
-        } else if (score >= 8) {
-            // Excellent match: green
+        } else if (score >= 7) {
+            // Good match: green
             backgroundColor = '#10b981';
             textColor = '#ffffff';
-            badgeContent = `${score}`;
-        } else if (score >= 6) {
-            // Good match: blue
-            backgroundColor = '#3b82f6';
-            textColor = '#ffffff';
-            badgeContent = `${score}`;
+            borderColor = '#059669';
+            badge.dataset.aiStyleScoreBadge = 'good';
+
+            badge.style.cssText = `
+                position: absolute;
+                background: ${backgroundColor};
+                color: ${textColor};
+                font-weight: 700;
+                font-size: 14px;
+                padding: 4px 10px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                z-index: 9999;
+                pointer-events: auto;
+                cursor: help;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                text-align: center;
+                border: 2px solid ${borderColor};
+            `;
         } else if (score >= 4) {
-            // Neutral: yellow
+            // Neutral: orange
             backgroundColor = '#f59e0b';
-            textColor = '#000000';
-            badgeContent = `${score}`;
+            textColor = '#78350f';
+            borderColor = '#d97706';
+            badge.dataset.aiStyleScoreBadge = 'neutral';
+
+            badge.style.cssText = `
+                position: absolute;
+                background: ${backgroundColor};
+                color: ${textColor};
+                font-weight: 700;
+                font-size: 14px;
+                padding: 4px 10px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                z-index: 9999;
+                pointer-events: auto;
+                cursor: help;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                text-align: center;
+                border: 2px solid ${borderColor};
+            `;
         } else {
             // Poor match: red
             backgroundColor = '#ef4444';
             textColor = '#ffffff';
-            badgeContent = `${score}`;
+            borderColor = '#dc2626';
+            badge.dataset.aiStyleScoreBadge = 'poor';
+
+            badge.style.cssText = `
+                position: absolute;
+                background: ${backgroundColor};
+                color: ${textColor};
+                font-weight: 700;
+                font-size: 14px;
+                padding: 4px 10px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                z-index: 9999;
+                pointer-events: auto;
+                cursor: help;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                text-align: center;
+                border: 2px solid ${borderColor};
+            `;
         }
 
-        badge.style.cssText = `
-            position: absolute;
-            background-color: ${backgroundColor};
-            color: ${textColor};
-            font-weight: bold;
-            font-size: 18px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            z-index: 9999;
-            pointer-events: auto;
-            cursor: help;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            min-width: 40px;
-            text-align: center;
-        `;
-
-        badge.textContent = badgeContent;
-        badge.title = reasoning;
-        badge.dataset.aiStyleScoreBadge = 'true';
+        // Set badge content
+        badge.textContent = `${score}`;
+        badge.title = `Score ${score}/10 - ${reasoning}`;
 
         return badge;
     }
@@ -943,6 +981,10 @@ export class VisualIndicators {
             delete img.dataset.aiStyleDetected;
             delete img.dataset.aiStyleIndex;
             delete img.dataset.aiStyleScore;
+
+            // Reset visual styling
+            img.style.opacity = '';
+            img.style.filter = '';
         }
     }
 
@@ -986,6 +1028,10 @@ export class VisualIndicators {
             delete img.dataset.aiStyleIndex;
             delete img.dataset.aiStyleRejected;
             delete img.dataset.aiStyleScore;
+
+            // Reset visual styling
+            img.style.opacity = '';
+            img.style.filter = '';
         });
 
         // Clear internal tracking
@@ -1047,12 +1093,12 @@ export class VisualIndicators {
             img.dataset.aiFilterMode = mode;
             img.dataset.aiScoreThreshold = scoreThreshold;
 
-            // Update highlight attribute for high scores (CSS will handle the styling)
-            if (overlayData.score >= 8 && mode === 'myStyle') {
-                console.log(`   ✨ applyFilterEffects: Setting highlighted=true for score ${overlayData.score} (type: ${typeof overlayData.score}), mode=${mode}`);
+            // Update highlight attribute for perfect matches (9-10)
+            if (overlayData.score >= 9 && mode === 'myStyle') {
+                console.log(`   ✨ applyFilterEffects: Setting highlighted=true for score ${overlayData.score}, mode=${mode}`);
                 overlayData.overlay.dataset.aiHighlighted = 'true';
             } else {
-                console.log(`   applyFilterEffects: Setting highlighted=false for score ${overlayData.score} (type: ${typeof overlayData.score}), mode=${mode}`);
+                console.log(`   applyFilterEffects: Setting highlighted=false for score ${overlayData.score}, mode=${mode}`);
                 overlayData.overlay.dataset.aiHighlighted = 'false';
             }
         });

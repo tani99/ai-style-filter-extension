@@ -85,7 +85,7 @@ export class ProductAnalyzer {
      * Analyze a single product image against user's style profile
      * @param {HTMLImageElement} productImage - Product image element
      * @param {Object} styleProfile - User's style profile
-     * @returns {Promise<Object>} Analysis result with score and reasoning
+     * @returns {Promise<Object>} Analysis result with score (1-10) and reasoning
      */
     async analyzeProduct(productImage, styleProfile) {
         console.log('🔍 analyzeProduct called for:', {
@@ -281,11 +281,13 @@ ${avoidColors.length > 0 ? `- Avoid colors: ${avoidColors.join(', ')}` : ''}
 ${avoidPatterns.length > 0 ? `- Avoid patterns: ${avoidPatterns.join(', ')}` : ''}
 
 TASK:
-Rate this item's compatibility with the user's style from 1-10:
-- 1-3: Poor match (conflicts with style)
-- 4-6: Neutral (neither great nor bad)
-- 7-8: Good match (fits style well)
-- 9-10: Excellent match (perfect for this style)
+Rate this item's compatibility with the user's style from 1-10. Be VERY STRICT and critical:
+- 1-3: Major conflicts with style (wrong colors, opposite aesthetic, clashing patterns)
+- 4-6: Partial conflicts or neutral (some mismatches with user's preferences)
+- 7-8: Good match (fits most style preferences but not exceptional)
+- 9-10: Perfect match (exceptional alignment with colors, patterns, and aesthetic - ONLY award these scores to items that truly excel)
+
+Be critical and selective. Most items should score 1-8. Only give 9-10 to items that are TRULY exceptional matches.
 
 Respond in this exact format:
 SCORE: [number 1-10]
@@ -293,7 +295,7 @@ REASON: [brief 1-sentence explanation]
 
 Example response:
 SCORE: 8
-REASON: Navy blazer matches classic style and recommended colors perfectly.`;
+REASON: Navy blazer matches classic style and recommended colors well.`;
 
         return prompt;
     }
@@ -336,7 +338,7 @@ REASON: Navy blazer matches classic style and recommended colors perfectly.`;
     }
 
     /**
-     * Parse AI response to extract score and reasoning
+     * Parse AI response to extract score (1-10) and reasoning
      * @private
      */
     parseAnalysisResponse(response) {

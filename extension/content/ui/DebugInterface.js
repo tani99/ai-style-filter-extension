@@ -79,15 +79,16 @@ export class DebugInterface {
         if (analyzedItems.length > 0) {
             const avgScore = analyzedItems.reduce((sum, item) => sum + item.styleAnalysis.score, 0) / analyzedItems.length;
             const scoreDistribution = {
-                high: analyzedItems.filter(item => item.styleAnalysis.score >= 8).length,
-                medium: analyzedItems.filter(item => item.styleAnalysis.score >= 6 && item.styleAnalysis.score < 8).length,
-                low: analyzedItems.filter(item => item.styleAnalysis.score < 6).length
+                perfect: analyzedItems.filter(item => item.styleAnalysis.score >= 9).length,
+                good: analyzedItems.filter(item => item.styleAnalysis.score >= 7 && item.styleAnalysis.score < 9).length,
+                neutral: analyzedItems.filter(item => item.styleAnalysis.score >= 4 && item.styleAnalysis.score < 7).length,
+                poor: analyzedItems.filter(item => item.styleAnalysis.score < 4).length
             };
 
             console.log('🎨 Style Analysis Summary:');
             console.log(`  📈 Analyzed products: ${analyzedItems.length}/${detectedImages.length}`);
             console.log(`  ⭐ Average score: ${Math.round(avgScore * 10) / 10}/10`);
-            console.log(`  📊 Score distribution: High(8-10): ${scoreDistribution.high}, Medium(6-7): ${scoreDistribution.medium}, Low(1-5): ${scoreDistribution.low}`);
+            console.log(`  📊 Score distribution: Perfect(9-10): ${scoreDistribution.perfect}, Good(7-8): ${scoreDistribution.good}, Neutral(4-6): ${scoreDistribution.neutral}, Poor(1-3): ${scoreDistribution.poor}`);
         }
 
         // Summary of detected images
@@ -96,7 +97,7 @@ export class DebugInterface {
             detectedImages.forEach((item, index) => {
                 const info = item.imageInfo || DOMUtils.getImageInfo(item.element);
                 const conf = item.confidence ? ` (${Math.round(item.confidence * 100)}%)` : '';
-                const styleInfo = item.styleAnalysis ? ` | Style: ${item.styleAnalysis.score}/10` : '';
+                const styleInfo = item.styleAnalysis ? ` | Score: ${item.styleAnalysis.score}/10` : '';
                 console.log(`  ${index + 1}. "${info.alt}" - [${item.method}${conf}]${styleInfo} ${item.reasoning}`);
                 console.log(`     Size: ${info.width}x${info.height}, Src: ${info.srcShort}`);
                 if (item.styleAnalysis) {
