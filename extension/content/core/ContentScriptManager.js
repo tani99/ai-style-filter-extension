@@ -9,6 +9,7 @@ import { CandidateFinder } from '../detection/CandidateFinder.js';
 // AI modules
 import { AIAnalysisEngine } from '../ai/AIAnalysisEngine.js';
 import { ProductAnalyzer } from '../ai/ProductAnalyzer.js';
+import { PromptRankingEngine } from '../ai/PromptRankingEngine.js';
 
 // UI modules
 import { LoadingAnimations } from '../ui/LoadingAnimations.js';
@@ -44,6 +45,7 @@ export class ContentScriptManager {
         this.imageDetector = new ImageDetector(this.currentSite, this.isClothingImageCallback.bind(this));
         this.aiAnalysisEngine = new AIAnalysisEngine();
         this.productAnalyzer = new ProductAnalyzer();
+        this.promptRankingEngine = new PromptRankingEngine();
 
         // UI components
         this.loadingAnimations = new LoadingAnimations();
@@ -64,6 +66,10 @@ export class ContentScriptManager {
         this.isInitialized = false;
         this.styleProfile = null; // User's style profile loaded from storage
         this.productAnalysisResults = new Map(); // Map of image -> analysis result
+
+        // Prompt ranking mode state
+        this.currentRankingMode = 'style'; // 'style' or 'prompt'
+        this.userPrompt = ''; // Current user prompt for prompt mode
 
         // Performance settings
         this.maxConcurrentAnalyses = 6;
@@ -88,6 +94,9 @@ export class ContentScriptManager {
 
         // Load user's style profile
         await this.loadStyleProfile();
+
+        // Load ranking mode and prompt
+        await this.loadRankingMode();
 
         // Initialize filter state manager
         await this.filterStateManager.initialize();
@@ -503,7 +512,7 @@ export class ContentScriptManager {
                                 );
 
                                 completedCount++;
-                                console.log(`✅ New product ${globalIndex + 1} scored: ${result.score}/10`);
+                                console.log(`✅ New product ${globalIndex + 1} score: ${result.score}/10`);
                             }
                         })
                         .catch((error) => {
@@ -556,46 +565,97 @@ export class ContentScriptManager {
     }
 
     /**
+     * Load ranking mode and user prompt from storage
+     * @returns {Promise<void>}
+     */
+    async loadRankingMode() {
+        try {
+            const result = await chrome.storage.local.get(['rankingMode', 'userPrompt']);
+
+            this.currentRankingMode = result.rankingMode || 'style';
+            this.userPrompt = result.userPrompt || '';
+
+            console.log('🎯 Ranking Mode:', this.currentRankingMode);
+            if (this.currentRankingMode === 'prompt') {
+                console.log('🔍 User Prompt:', `"${this.userPrompt}"`);
+            }
+        } catch (error) {
+            console.error('❌ Failed to load ranking mode:', error);
+        }
+    }
+
+    /**
      * Analyze all detected products against user's style profile
      * Implements Step 5.1: Real-time Product Analysis
      * @returns {Promise<void>}
      */
     async analyzeDetectedProducts() {
         console.log('🎯 analyzeDetectedProducts called');
-        console.log('   Style profile:', this.styleProfile ? 'PRESENT' : 'MISSING');
+        console.log('   Ranking mode:', this.currentRankingMode);
         console.log('   Detected products:', this.detectedProducts.length);
-
-        if (!this.styleProfile) {
-            console.warn('⚠️ No style profile available for analysis');
-            console.log('   You need to upload photos and generate a style profile first');
-            return;
-        }
 
         if (this.detectedProducts.length === 0) {
             console.log('ℹ️ No detected products to analyze');
             return;
         }
 
+        // Choose analyzer and parameter based on ranking mode
+        let analyzer;
+        let analysisParam;
+        let loadingMessage;
+
+        if (this.currentRankingMode === 'prompt') {
+            // Prompt mode validation
+            if (!this.userPrompt) {
+                console.warn('⚠️ Prompt mode active but no prompt set');
+                return;
+            }
+
+            analyzer = this.promptRankingEngine;
+            analysisParam = this.userPrompt;
+            loadingMessage = `Searching for "${this.userPrompt}"...`;
+
+            console.log('🔍 Using Prompt Ranking Mode');
+            console.log('   Prompt:', `"${this.userPrompt}"`);
+
+        } else {
+            // Style mode validation
+            if (!this.styleProfile) {
+                console.warn('⚠️ No style profile available for analysis');
+                console.log('   You need to upload photos and generate a style profile first');
+                return;
+            }
+
+            analyzer = this.productAnalyzer;
+            analysisParam = this.styleProfile;
+            loadingMessage = 'Analyzing products against your style...';
+
+            console.log('✨ Using Style Profile Mode');
+            console.log('   Style profile details:', {
+                colors: this.styleProfile.color_palette?.best_colors,
+                styles: this.styleProfile.style_categories?.map(c => c.name),
+                version: this.styleProfile.version
+            });
+        }
+
         console.log(`🔍 Starting product analysis for ${this.detectedProducts.length} items...`);
-        console.log('   Style profile details:', {
-            colors: this.styleProfile.color_palette?.best_colors,
-            styles: this.styleProfile.style_categories?.map(c => c.name),
-            version: this.styleProfile.version
-        });
 
         // Show analysis loading message
-        this.loadingAnimations.showLoadingAnimation('Analyzing products against your style...');
+        this.loadingAnimations.showLoadingAnimation(loadingMessage);
 
         try {
             // Extract image elements from detected products
             const productImages = this.detectedProducts.map(product => product.element);
             console.log('📦 Product images to analyze:', productImages.length);
 
-            // Analyze products in batches
+            // Initialize the analyzer
+            await analyzer.initialize();
+
+            // Analyze products in batches using the selected analyzer
             console.log('🚀 Starting batch analysis...');
-            const analysisResults = await this.productAnalyzer.analyzeBatch(
+            const analysisResults = await analyzer.analyzeBatch(
                 productImages,
-                this.styleProfile,
+                analysisParam,
                 {
                     batchSize: 3,
                     delayBetweenBatches: 500,
@@ -610,9 +670,31 @@ export class ContentScriptManager {
 
             console.log('✅ Batch analysis complete, results:', analysisResults);
 
+            // Normalize results: convert tier (1-3) to score (1-10) if using prompt mode
+            const normalizedResults = analysisResults.map(result => {
+                if (this.currentRankingMode === 'prompt' && result.tier !== undefined) {
+                    // Convert tier to score:
+                    // Tier 1 (bad) -> Score 1-3
+                    // Tier 2 (fine) -> Score 4-6
+                    // Tier 3 (good) -> Score 7-10
+                    const tierToScoreMap = {
+                        1: 2,  // Bad tier -> low score
+                        2: 5,  // Fine tier -> medium score
+                        3: 9   // Good tier -> high score
+                    };
+
+                    return {
+                        ...result,
+                        score: tierToScoreMap[result.tier] || 5,
+                        tier: result.tier // Keep tier for debugging
+                    };
+                }
+                return result;
+            });
+
             // Store analysis results
             productImages.forEach((img, index) => {
-                const result = analysisResults[index];
+                const result = normalizedResults[index];
                 this.productAnalysisResults.set(img, result);
 
                 // Log detailed score information with source
@@ -637,21 +719,23 @@ export class ContentScriptManager {
 
             // Update visual indicators with scores
             console.log('🎨 Updating visual indicators with scores...');
-            this.updateProductScores(analysisResults);
+            this.updateProductScores(normalizedResults);
 
             // Hide loading animation
             this.loadingAnimations.hideLoadingAnimation();
 
             // Show completion message
-            const avgScore = this.calculateAverageScore(analysisResults);
-            this.loadingAnimations.showSuccessMessage(
-                `Analysis complete! Average compatibility: ${avgScore.toFixed(1)}/10`
-            );
+            const avgScore = this.calculateAverageScore(normalizedResults);
+            const completionMessage = this.currentRankingMode === 'prompt'
+                ? `Found matches for "${this.userPrompt}"!`
+                : `Analysis complete! Average compatibility: ${avgScore.toFixed(1)}/10`;
+
+            this.loadingAnimations.showSuccessMessage(completionMessage);
 
             // Count score sources
-            const aiScores = analysisResults.filter(r => r.method === 'ai_analysis').length;
-            const defaultScores = analysisResults.filter(r => r.method === 'fallback' || r.method === 'error_fallback').length;
-            const cachedScores = analysisResults.filter(r => r.cached).length;
+            const aiScores = normalizedResults.filter(r => r.method === 'ai_analysis' || r.method === 'prompt_analysis').length;
+            const defaultScores = normalizedResults.filter(r => r.method === 'fallback' || r.method === 'error_fallback').length;
+            const cachedScores = normalizedResults.filter(r => r.cached).length;
 
             console.log('✅ Product analysis complete:', {
                 totalProducts: analysisResults.length,
@@ -770,7 +854,7 @@ export class ContentScriptManager {
                                 );
 
                                 completedCount++;
-                                console.log(`✅ Product ${index + 1}/${productImages.length} scored: ${result.score}/10 (${completedCount} completed)`);
+                                console.log(`✅ Product ${index + 1}/${productImages.length} score: ${result.score}/10 (${completedCount} completed)`);
                             }
                         })
                         .catch((error) => {
@@ -960,6 +1044,18 @@ export class ContentScriptManager {
                     this.filterStateManager.updateFilterState(message.filterState);
                 }
                 break;
+            case 'applyPrompt':
+                // Handle prompt mode activation
+                if (message.prompt) {
+                    console.log('📩 Applying prompt from popup:', message.prompt);
+                    this.handleApplyPrompt(message.prompt);
+                }
+                break;
+            case 'switchToStyleMode':
+                // Handle switch back to style mode
+                console.log('📩 Switching to style mode from popup');
+                this.handleSwitchToStyleMode();
+                break;
             default:
                 console.log('Unknown message:', message);
         }
@@ -1042,6 +1138,59 @@ export class ContentScriptManager {
             });
         } catch (error) {
             console.log('Could not notify background script:', error);
+        }
+    }
+
+    /**
+     * Handle applying a user prompt for product ranking
+     * @param {string} prompt - User's search prompt
+     * @returns {Promise<void>}
+     */
+    async handleApplyPrompt(prompt) {
+        console.log('🔍 handleApplyPrompt called with:', prompt);
+
+        // Update state
+        this.currentRankingMode = 'prompt';
+        this.userPrompt = prompt;
+
+        // Clear existing analysis cache
+        console.log('🧹 Clearing analysis caches...');
+        this.productAnalysisResults.clear();
+        this.promptRankingEngine.clearCache();
+
+        // Re-analyze all detected products with new prompt
+        if (this.detectedProducts.length > 0) {
+            console.log('🔄 Re-analyzing products with prompt...');
+            await this.analyzeDetectedProducts();
+        } else {
+            console.log('ℹ️ No detected products to analyze');
+        }
+    }
+
+    /**
+     * Handle switching back to style mode
+     * @returns {Promise<void>}
+     */
+    async handleSwitchToStyleMode() {
+        console.log('✨ handleSwitchToStyleMode called');
+
+        // Update state
+        this.currentRankingMode = 'style';
+        this.userPrompt = '';
+
+        // Clear prompt analysis cache
+        console.log('🧹 Clearing prompt analysis cache...');
+        this.promptRankingEngine.clearCache();
+        this.productAnalysisResults.clear();
+
+        // Re-analyze with style profile if available
+        if (this.styleProfile && this.detectedProducts.length > 0) {
+            console.log('🔄 Re-analyzing products with style profile...');
+            await this.analyzeDetectedProducts();
+        } else if (!this.styleProfile) {
+            console.log('ℹ️ No style profile available for analysis');
+        } else {
+            console.log('ℹ️ No detected products to analyze');
         }
     }
 }
