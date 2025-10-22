@@ -91,8 +91,27 @@ chrome.runtime.onInstalled.addListener(async (details) => {
             'firstInstall': true,
             'styleProfile': null,
             'userPhotos': [],
-            'tryOnCache': {}
+            'tryOnCache': {},
+            // Prompt mode fields
+            'userPrompt': '',
+            'rankingMode': 'style', // 'style' or 'prompt'
+            'recentPrompts': [],
+            'promptHistory': []
         });
+    } else if (details.reason === 'update') {
+        // Migration: Add new fields if they don't exist
+        const storage = await chrome.storage.local.get(['userPrompt', 'rankingMode', 'recentPrompts', 'promptHistory']);
+
+        const updates = {};
+        if (storage.userPrompt === undefined) updates.userPrompt = '';
+        if (storage.rankingMode === undefined) updates.rankingMode = 'style';
+        if (storage.recentPrompts === undefined) updates.recentPrompts = [];
+        if (storage.promptHistory === undefined) updates.promptHistory = [];
+
+        if (Object.keys(updates).length > 0) {
+            console.log('[Background] Migrating storage schema with prompt fields:', updates);
+            await chrome.storage.local.set(updates);
+        }
     }
 
     // Trigger wardrobe analysis on installation/update if user is logged in
