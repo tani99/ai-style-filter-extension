@@ -36,6 +36,46 @@
                     </label>
                 </div>
 
+                <!-- Divider -->
+                <div class="divider">
+                    <span>OR</span>
+                </div>
+
+                <!-- Prompt Search Mode -->
+                <div class="filter-control">
+                    <label class="prompt-label">
+                        <span>🔍 Search for Specific Item</span>
+                    </label>
+                    <div class="prompt-input-container">
+                        <input
+                            type="text"
+                            id="promptInput"
+                            class="prompt-input"
+                            placeholder="e.g., black A-line dress"
+                            maxlength="200"
+                        >
+                        <button id="applyPromptBtn" class="apply-prompt-btn" disabled>
+                            Apply
+                        </button>
+                    </div>
+                    <button id="clearPromptBtn" class="clear-prompt-btn" style="display: none;">
+                        Clear Search
+                    </button>
+
+                    <!-- Recent prompts quick access -->
+                    <div id="recentPrompts" class="recent-prompts" style="display: none;">
+                        <span class="recent-label">Recent:</span>
+                        <div id="recentPromptsList" class="recent-prompts-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active mode indicator -->
+                <div id="activeModeIndicator" class="active-mode-indicator">
+                    <span id="activeModeText">Mode: All Items</span>
+                </div>
+
                 <!-- Match Sensitivity Slider -->
                 <div class="filter-control">
                     <div class="slider-label">

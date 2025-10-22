@@ -244,3 +244,171 @@ body {
 .hint-right {
     padding: 0 4px;
 }
+
+/* Divider */
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 15px 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.divider span {
+    padding: 0 10px;
+}
+
+/* Prompt input */
+.prompt-label {
+    font-weight: 600;
+    color: white;
+    font-size: 13px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.prompt-input-container {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+    margin-bottom: 8px;
+}
+
+.prompt-input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+.prompt-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.prompt-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.apply-prompt-btn {
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #667eea;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+}
+
+.apply-prompt-btn:hover:not(:disabled) {
+    background: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.apply-prompt-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.clear-prompt-btn {
+    width: 100%;
+    padding: 8px 14px;
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.clear-prompt-btn:hover {
+    background: rgba(239, 68, 68, 1);
+    transform: translateY(-1px);
+}
+
+/* Recent prompts */
+.recent-prompts {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+.recent-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.recent-prompts-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.recent-prompt-chip {
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: white;
+}
+
+.recent-prompt-chip:hover {
+    background: rgba(255, 255, 255, 0.9);
+    color: #667eea;
+    border-color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-1px);
+}
+
+/* Active mode indicator */
+.active-mode-indicator {
+    margin: 12px 0 8px 0;
+    padding: 8px 12px;
+    background: rgba(16, 185, 129, 0.8);
+    color: white;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.active-mode-indicator.prompt-mode {
+    background: rgba(59, 130, 246, 0.8);
+}
+
+.active-mode-indicator.style-mode {
+    background: rgba(16, 185, 129, 0.8);
+}
+
+.active-mode-indicator.all-mode {
+    background: rgba(107, 114, 128, 0.8);
+}
