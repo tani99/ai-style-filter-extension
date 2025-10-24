@@ -159,11 +159,34 @@ async function testVirtualTryOn() {
         // Read clothing image
         const clothingImageData = await readFileAsDataURL(clothingFile);
 
+        // Try to extract outfit description from detected products on the page
+        // This checks if the uploaded image matches any detected product
+        let outfitDescription = null;
+        try {
+            // Query all detected clothing items on the current page
+            const detectedImages = document.querySelectorAll('[data-clothing-item-detected="true"][data-ai-outfit-description]');
+
+            // Try to match the uploaded image with detected products by comparing image data
+            // (This is a simple approach; a more sophisticated matching could be implemented)
+            for (const detectedImg of detectedImages) {
+                if (detectedImg.dataset.aiOutfitDescription) {
+                    // For now, use the first detected product's description as a fallback
+                    // A better approach would be to let the user select which detected product to try on
+                    outfitDescription = detectedImg.dataset.aiOutfitDescription;
+                    console.log('📝 Found outfit description from detected product:', outfitDescription.substring(0, 100) + '...');
+                    break;
+                }
+            }
+        } catch (error) {
+            console.log('Could not find outfit description from detected products:', error);
+        }
+
         // Show the 3-column layout immediately with loading animation in the 3rd spot
         tryonResult.style.display = 'block';
         tryonResult.innerHTML = `
             <div class="tryon-success">
                 <h4>✨ Virtual Try-On Result</h4>
+                ${outfitDescription ? `<p class="outfit-description-hint">💡 Using AI-generated outfit description for better quality</p>` : ''}
                 <div class="tryon-images-three">
                     <div class="image-container">
                         <h5>Your Photo</h5>
@@ -193,7 +216,8 @@ async function testVirtualTryOn() {
             userPhoto: userPhoto.data,
             clothingImage: clothingImageData,
             options: {
-                temperature: 0.7
+                temperature: 0.7,
+                outfitDescription: outfitDescription  // Include outfit description if available
             }
         });
 

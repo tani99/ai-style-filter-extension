@@ -58,7 +58,8 @@ export class VisualIndicators {
         this.attachTryonHandler(eyeIcon, img, index);
 
         // Set data attributes
-        img.dataset.aiStyleDetected = 'true';
+        // clothingItemDetected: 'true' = confirmed clothing item, 'false' = not clothing, undefined = not analyzed
+        img.dataset.clothingItemDetected = 'true';
         img.dataset.aiStyleIndex = index;
 
         // Add tooltip
@@ -91,7 +92,7 @@ export class VisualIndicators {
         this.positionOverlay(overlay, img);
 
         // Set data attributes and tooltip
-        img.dataset.aiStyleDetected = 'false';
+        img.dataset.clothingItemDetected = 'false';  // Not a clothing item
         img.dataset.aiStyleRejected = 'true';
         img.title = `Rejected: ${item.reason}`;
 
@@ -548,6 +549,17 @@ export class VisualIndicators {
             imgSrc: img.src.substring(0, 60) + '...'
         });
 
+        // VALIDATION: Ensure score is valid before proceeding
+        // Determine expected range based on mode
+        const isTierSystem = mode === 'prompt' || (mode === null && score <= 3);
+        const maxValidScore = isTierSystem ? 3 : 10;
+
+        if (score < 1 || score > maxValidScore) {
+            console.error(`❌ Invalid score ${score} for mode "${mode}" (expected 1-${maxValidScore}). Ignoring.`);
+            console.error('   This indicates stale cached data or analysis error.');
+            return; // Don't add score overlay with invalid score
+        }
+
         // Get existing overlay data
         const overlayData = this.overlayMap.get(img);
         console.log('   Overlay data:', overlayData ? 'FOUND' : 'NOT FOUND');
@@ -572,8 +584,7 @@ export class VisualIndicators {
             badge.remove();
         });
 
-        // Determine if using tier system (prompt mode) or score system (style mode)
-        const isTierSystem = mode === 'prompt' || (mode === null && score <= 3);
+        // Log tier system determination (already computed above)
         console.log('   Using tier system:', isTierSystem, '(mode:', mode, ')');
 
         // Create score badge (for all scores during testing)
@@ -1162,7 +1173,7 @@ export class VisualIndicators {
             this.overlayMap.delete(img);
 
             // Clean up image data attributes
-            delete img.dataset.aiStyleDetected;
+            delete img.dataset.clothingItemDetected;
             delete img.dataset.aiStyleIndex;
             delete img.dataset.aiStyleScore;
 
@@ -1206,9 +1217,9 @@ export class VisualIndicators {
         });
 
         // Clear image data attributes
-        const markedImages = document.querySelectorAll('[data-ai-style-detected]');
+        const markedImages = document.querySelectorAll('[data-clothing-item-detected]');
         markedImages.forEach(img => {
-            delete img.dataset.aiStyleDetected;
+            delete img.dataset.clothingItemDetected;
             delete img.dataset.aiStyleIndex;
             delete img.dataset.aiStyleRejected;
             delete img.dataset.aiStyleScore;

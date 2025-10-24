@@ -8,8 +8,8 @@ import { CandidateFinder } from '../detection/CandidateFinder.js';
 
 // AI modules
 import { AIAnalysisEngine } from '../ai/AIAnalysisEngine.js';
-import { ProductAnalyzer } from '../ai/ProductAnalyzer.js';
-import { PromptRankingEngine } from '../ai/PromptRankingEngine.js';
+import { PersonalStyleMatcher } from '../ai/PersonalStyleMatcher.js';
+import { ProductSearchMatcher } from '../ai/ProductSearchMatcher.js';
 
 // UI modules
 import { LoadingAnimations } from '../ui/LoadingAnimations.js';
@@ -44,8 +44,8 @@ export class ContentScriptManager {
         this.candidateFinder = new CandidateFinder(this.currentSite);
         this.imageDetector = new ImageDetector(this.currentSite, this.isClothingImageCallback.bind(this));
         this.aiAnalysisEngine = new AIAnalysisEngine();
-        this.productAnalyzer = new ProductAnalyzer();
-        this.promptRankingEngine = new PromptRankingEngine();
+        this.personalStyleMatcher = new PersonalStyleMatcher();
+        this.productSearchMatcher = new ProductSearchMatcher();
 
         // UI components
         this.loadingAnimations = new LoadingAnimations();
@@ -68,11 +68,10 @@ export class ContentScriptManager {
         this.productAnalysisResults = new Map(); // Map of image -> analysis result
 
         // Prompt ranking mode state
-        this.currentRankingMode = 'style'; // 'style' or 'prompt'
+        this.currentRankingMode = 'off'; // 'off', 'style', or 'prompt'
         this.userPrompt = ''; // Current user prompt for prompt mode
 
         // Performance settings
-        this.maxConcurrentAnalyses = 6;
         this.viewportAnalysisEnabled = false; // Disabled - detect all images at once
         this.analysisObserver = null;
     }
@@ -102,8 +101,8 @@ export class ContentScriptManager {
         await this.filterStateManager.initialize();
         this.filterStateManager.addListener(this.handleFilterStateChange.bind(this));
 
-        // Initialize based on page type
-        this.initializeForPageType();
+        // Run initial product detection
+        this.runInitialDetection();
 
         // Set up event listeners
         this.setupEventListeners();
@@ -149,53 +148,11 @@ export class ContentScriptManager {
     }
 
     /**
-     * Initialize based on detected page type
+     * Run initial product detection after a brief delay
      * @private
      */
-    initializeForPageType() {
-        switch (this.pageType) {
-            case 'product':
-                console.log('🛍️ Initializing for product page');
-                this.initializeProductPage();
-                break;
-            case 'category':
-            case 'search':
-                console.log('📋 Initializing for listing page');
-                this.initializeListingPage();
-                break;
-            default:
-                console.log('🏠 Initializing for general page');
-                this.initializeGeneralPage();
-        }
-    }
-
-    /**
-     * Initialize for product pages
-     * @private
-     */
-    async initializeProductPage() {
-        // Wait a bit for product images to load
-        setTimeout(async () => {
-            await this.detectProductImages();
-        }, 500);
-    }
-
-    /**
-     * Initialize for listing pages (category, search)
-     * @private
-     */
-    async initializeListingPage() {
-        // Wait for page to settle
-        setTimeout(async () => {
-            await this.detectProductImages();
-        }, 1000);
-    }
-
-    /**
-     * Initialize for general pages
-     * @private
-     */
-    async initializeGeneralPage() {
+    async runInitialDetection() {
+        // Wait for page to settle and images to load
         setTimeout(async () => {
             await this.detectProductImages();
         }, 1000);
@@ -242,11 +199,12 @@ export class ContentScriptManager {
                     console.log('👁️ Image entered viewport:', {
                         alt: img.alt,
                         src: img.src.substring(0, 50),
-                        hasDetectedFlag: img.dataset.aiStyleDetected,
-                        hasAnalyzingFlag: img.dataset.aiAnalyzing
+                        clothingItemDetected: img.dataset.clothingItemDetected,
+                        detectionInProgress: img.dataset.clothingItemDetectionInProgress
                     });
 
-                    if (!img.dataset.aiStyleDetected && !img.dataset.aiAnalyzing) {
+                    // Only analyze if not already checked (undefined) and not currently analyzing
+                    if (!img.dataset.clothingItemDetected && !img.dataset.clothingItemDetectionInProgress) {
                         console.log('🔄 Triggering analysis for scrolled image');
                         this.analyzeNewImage(img);
                     } else {
@@ -272,7 +230,8 @@ export class ContentScriptManager {
         let observedCount = 0;
 
         allImages.forEach(img => {
-            if (!img.dataset.aiStyleDetected && !img.dataset.aiAnalyzing) {
+            // Only observe images that haven't been checked yet (undefined = not analyzed)
+            if (!img.dataset.clothingItemDetected && !img.dataset.clothingItemDetectionInProgress) {
                 this.analysisObserver.observe(img);
                 observedCount++;
             }
@@ -284,12 +243,13 @@ export class ContentScriptManager {
     }
 
     /**
-     * Analyze a newly visible image
+     * Analyze a newly visible image to determine if it's a clothing item
      * @param {HTMLImageElement} img - Image element to analyze
      */
     async analyzeNewImage(img) {
-        // Mark as being analyzed to prevent duplicate analysis
-        img.dataset.aiAnalyzing = 'true';
+        // Mark as being analyzed to prevent duplicate concurrent analysis
+        // undefined = not analyzed, 'true' = detection in progress
+        img.dataset.clothingItemDetectionInProgress = 'true';
 
         try {
             // Create a temporary array with just this image
@@ -303,16 +263,16 @@ export class ContentScriptManager {
             // Check visibility
             const visibilityCheck = this.imageDetector.visibilityChecker.isImageVisible(img);
             if (!visibilityCheck.isVisible) {
-                img.dataset.aiStyleDetected = 'false';
-                delete img.dataset.aiAnalyzing;
+                img.dataset.clothingItemDetected = 'false';  // Not clothing (failed visibility check)
+                delete img.dataset.clothingItemDetectionInProgress;
                 return;
             }
 
             // Check quality
             const quality = this.imageDetector.visibilityChecker.checkImageQuality(img);
             if (!quality.isValid) {
-                img.dataset.aiStyleDetected = 'false';
-                delete img.dataset.aiAnalyzing;
+                img.dataset.clothingItemDetected = 'false';  // Not clothing (failed quality check)
+                delete img.dataset.clothingItemDetectionInProgress;
                 return;
             }
 
@@ -327,25 +287,25 @@ export class ContentScriptManager {
                         imageInfo: { alt: img.alt, src: img.src },
                         reason: isClothing.reasoning || 'AI detected as clothing',
                         confidence: isClothing.confidence || 0.8,
-                        method: isClothing.method || 'ai_classification'
+                        method: isClothing.method || 'ai_clothing_detection'  // More specific: indicates clothing detection
                     };
 
                     // Add indicator
                     this.visualIndicators.addDetectedImageIndicator(result, currentCount);
                     this.detectedProducts.push(result);
 
-                    img.dataset.aiStyleDetected = 'true';
+                    img.dataset.clothingItemDetected = 'true';  // Confirmed: is clothing
                     console.log(`✅ Scroll detected image ${currentCount + 1}: ${img.alt || img.src.substring(0, 50)}`);
                 } else {
-                    img.dataset.aiStyleDetected = 'false';
+                    img.dataset.clothingItemDetected = 'false';  // AI determined: not clothing
                 }
             }
 
-            delete img.dataset.aiAnalyzing;
+            delete img.dataset.clothingItemDetectionInProgress;  // Analysis complete
         } catch (error) {
             console.error('Error analyzing new image:', error);
-            delete img.dataset.aiAnalyzing;
-            img.dataset.aiStyleDetected = 'false';
+            delete img.dataset.clothingItemDetectionInProgress;
+            img.dataset.clothingItemDetected = 'false';  // Error = treat as not clothing
         }
     }
 
@@ -400,15 +360,14 @@ export class ContentScriptManager {
                     `Found ${results.detectedImages.length} clothing items`
                 );
 
-                // Analyze products against style profile immediately
-                if (this.styleProfile) {
-                    // Add loading indicators to all detected products
-                    results.detectedImages.forEach((item, index) => {
-                        this.visualIndicators.addLoadingIndicator(item.element, index);
-                    });
+                // Generate outfit descriptions for virtual try-on (runs in background)
+                this.generateOutfitDescriptions(results.detectedImages);
 
-                    // Start analyzing all products immediately (in parallel)
-                    this.analyzeDetectedProductsInParallel();
+                // Always analyze products in the background (regardless of display mode)
+                // This ensures data is ready when user toggles display modes
+                if (this.styleProfile) {
+                    // Start analyzing all products using batched analysis
+                    await this.analyzeInBackground();
                 } else {
                     console.log('ℹ️ No style profile available - skipping product analysis');
                 }
@@ -466,6 +425,7 @@ export class ContentScriptManager {
 
     /**
      * Analyze newly detected products (from lazy loading)
+     * Always runs style analysis in background, shows UI based on mode
      * @param {Array<Object>} newProducts - Array of newly detected product objects
      * @param {number} startIndex - Starting index for these products in the overall list
      * @private
@@ -475,69 +435,81 @@ export class ContentScriptManager {
 
         const productImages = newProducts.map(product => product.element);
 
-        // Track active analyses
-        let activeAnalyses = 0;
-        let completedCount = 0;
-        let currentIndex = 0;
+        if (!this.styleProfile) {
+            console.log('ℹ️ No style profile - skipping analysis');
+            return;
+        }
 
-        // Analyze with controlled concurrency
-        await new Promise((resolve) => {
-            const startNextAnalysis = async () => {
-                if (currentIndex >= productImages.length && activeAnalyses === 0) {
-                    resolve();
-                    return;
+        try {
+            // Always analyze with style profile in background
+            await this.personalStyleMatcher.initialize();
+            const styleResults = await this.personalStyleMatcher.analyzeBatch(
+                productImages,
+                { styleProfile: this.styleProfile },
+                {
+                    batchSize: 3,
+                    delayBetweenBatches: 500,
+                    onProgress: (progress) => {
+                        console.log(`   📊 New products background analysis: ${progress.completed}/${progress.total}`);
+                    }
                 }
+            );
 
-                while (currentIndex < productImages.length && activeAnalyses < this.maxConcurrentAnalyses) {
-                    const localIndex = currentIndex;
+            // Store style results
+            productImages.forEach((img, localIndex) => {
+                this.productAnalysisResults.set(img, styleResults[localIndex]);
+            });
+
+            console.log(`✅ Background style analysis complete for ${newProducts.length} new products`);
+
+            // Show UI based on current mode
+            if (this.currentRankingMode === 'style') {
+                // Show style badges
+                styleResults.forEach((result, localIndex) => {
                     const globalIndex = startIndex + localIndex;
-                    const img = productImages[localIndex];
-                    currentIndex++;
-                    activeAnalyses++;
+                    const product = newProducts[localIndex];
+                    const isFallback = result.success === false || result.method?.includes('fallback');
+                    
+                    if (product?.element && !isFallback) {
+                        this.visualIndicators.addScoreOverlay(
+                            product.element,
+                            result.score,
+                            result.reasoning,
+                            globalIndex,
+                            'style'
+                        );
+                    }
+                });
+            } else if (this.currentRankingMode === 'prompt' && this.userPrompt) {
+                // Run prompt analysis and show prompt badges
+                const promptResults = await this.productSearchMatcher.analyzeBatch(
+                    productImages,
+                    { userPrompt: this.userPrompt },
+                    { batchSize: 3, delayBetweenBatches: 500 }
+                );
 
-                    console.log(`🔄 Analyzing new product ${globalIndex + 1} (${activeAnalyses} active)`);
+                promptResults.forEach((result, localIndex) => {
+                    const globalIndex = startIndex + localIndex;
+                    const product = newProducts[localIndex];
+                    const isFallback = result.success === false || result.method?.includes('fallback');
+                    
+                    if (product?.element && !isFallback) {
+                        this.visualIndicators.addScoreOverlay(
+                            product.element,
+                            result.tier || result.score,
+                            result.reasoning,
+                            globalIndex,
+                            'prompt'
+                        );
+                    }
+                });
+            } else {
+                console.log('ℹ️ Mode is', this.currentRankingMode, '- UI badges hidden for new products');
+            }
 
-                    this.productAnalyzer.analyzeProduct(img, this.styleProfile)
-                        .then((result) => {
-                            this.productAnalysisResults.set(img, result);
-
-                            const product = newProducts[localIndex];
-                            if (product && product.element) {
-                                // Only show badge if analysis was successful (not a fallback)
-                                const isFallback = result.success === false ||
-                                                  (result.method && result.method.includes('fallback'));
-
-                                if (isFallback) {
-                                    console.log(`   ⚠️ New product ${globalIndex + 1} returned fallback - keeping loading indicator`);
-                                } else {
-                                    this.visualIndicators.addScoreOverlay(
-                                        product.element,
-                                        result.score,
-                                        result.reasoning,
-                                        globalIndex,
-                                        this.currentRankingMode
-                                    );
-
-                                    console.log(`✅ New product ${globalIndex + 1} score: ${result.score}/10`);
-                                }
-                                completedCount++;
-                            }
-                        })
-                        .catch((error) => {
-                            console.error(`❌ Failed to analyze new product ${globalIndex + 1}:`, error);
-                            completedCount++;
-                        })
-                        .finally(() => {
-                            activeAnalyses--;
-                            startNextAnalysis();
-                        });
-                }
-            };
-
-            startNextAnalysis();
-        });
-
-        console.log(`✅ Finished analyzing ${completedCount} new products`);
+        } catch (error) {
+            console.error('❌ Failed to analyze new products:', error);
+        }
     }
 
     /**
@@ -593,6 +565,117 @@ export class ContentScriptManager {
     }
 
     /**
+     * Generate outfit descriptions for detected products (for virtual try-on)
+     * Runs in background without blocking UI
+     * @param {Array<Object>} detectedImages - Array of detected product objects
+     * @private
+     */
+    async generateOutfitDescriptions(detectedImages) {
+        console.log('👗 Starting outfit description generation for', detectedImages.length, 'products...');
+
+        if (detectedImages.length === 0) {
+            return;
+        }
+
+        try {
+            // Initialize the personal style matcher to use its description generation method
+            await this.personalStyleMatcher.initialize();
+
+            // Generate descriptions in small batches to avoid overwhelming the AI
+            const batchSize = 3;
+            let completedCount = 0;
+
+            for (let i = 0; i < detectedImages.length; i += batchSize) {
+                const batch = detectedImages.slice(i, i + batchSize);
+
+                // Process batch in parallel
+                const batchPromises = batch.map(async (product) => {
+                    try {
+                        const description = await this.personalStyleMatcher.generateOutfitDescription(product.element);
+
+                        if (description) {
+                            // Store description in DOM data attribute
+                            product.element.dataset.aiOutfitDescription = description;
+                            console.log(`✅ Generated description for product ${completedCount + 1}:`,
+                                description.substring(0, 100) + '...');
+                            return true;
+                        } else {
+                            console.log(`⚠️ Failed to generate description for product ${completedCount + 1}`);
+                            return false;
+                        }
+                    } catch (error) {
+                        console.error(`❌ Error generating description for product ${completedCount + 1}:`, error);
+                        return false;
+                    }
+                });
+
+                await Promise.all(batchPromises);
+                completedCount += batch.length;
+
+                // Small delay between batches
+                if (i + batchSize < detectedImages.length) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+
+            console.log(`✅ Outfit description generation complete: ${completedCount}/${detectedImages.length} products`);
+
+        } catch (error) {
+            console.error('❌ Outfit description generation failed:', error);
+        }
+    }
+
+    /**
+     * Analyze products in the background (always runs style analysis)
+     * @returns {Promise<void>}
+     * @private
+     */
+    async analyzeInBackground() {
+        console.log('🔍 Background analysis starting for', this.detectedProducts.length, 'products');
+
+        if (this.detectedProducts.length === 0 || !this.styleProfile) {
+            return;
+        }
+
+        // Always use style analyzer for background analysis
+        const productImages = this.detectedProducts.map(product => product.element);
+
+        try {
+            await this.personalStyleMatcher.initialize();
+
+            // Analyze products with style profile
+            const analysisResults = await this.personalStyleMatcher.analyzeBatch(
+                productImages,
+                { styleProfile: this.styleProfile },
+                {
+                    batchSize: 3,
+                    delayBetweenBatches: 500,
+                    onProgress: (progress) => {
+                        console.log(`   📊 Background analysis: ${progress.completed}/${progress.total}`);
+                    }
+                }
+            );
+
+            // Store results in memory
+            productImages.forEach((img, index) => {
+                this.productAnalysisResults.set(img, analysisResults[index]);
+            });
+
+            console.log('✅ Background style analysis complete');
+
+            // Only show UI if mode is 'style'
+            if (this.currentRankingMode === 'style') {
+                this.updateProductScores(analysisResults);
+            } else {
+                console.log('ℹ️ Mode is', this.currentRankingMode, '- UI badges hidden');
+            }
+
+        } catch (error) {
+            console.error('❌ Background analysis failed:', error);
+        }
+    }
+
+    /**
      * Analyze all detected products against user's style profile
      * Implements Step 5.1: Real-time Product Analysis
      * @returns {Promise<void>}
@@ -619,8 +702,8 @@ export class ContentScriptManager {
                 return;
             }
 
-            analyzer = this.promptRankingEngine;
-            analysisParam = this.userPrompt;
+            analyzer = this.productSearchMatcher;
+            analysisParam = { userPrompt: this.userPrompt };  // ✅ FIX: Wrap in object
             loadingMessage = `Searching for "${this.userPrompt}"...`;
 
             console.log('🔍 Using Prompt Ranking Mode');
@@ -634,8 +717,8 @@ export class ContentScriptManager {
                 return;
             }
 
-            analyzer = this.productAnalyzer;
-            analysisParam = this.styleProfile;
+            analyzer = this.personalStyleMatcher;
+            analysisParam = { styleProfile: this.styleProfile };  // ✅ FIX: Wrap in object for consistency
             loadingMessage = 'Analyzing products against your style...';
 
             console.log('✨ Using Style Profile Mode');
@@ -760,7 +843,7 @@ export class ContentScriptManager {
                     fromDefault: defaultScores,
                     fromCache: cachedScores
                 },
-                cacheStats: this.productAnalyzer.getCacheStats()
+                cacheStats: this.personalStyleMatcher.getCacheStats()
             });
 
             if (defaultScores > 0) {
@@ -828,97 +911,6 @@ export class ContentScriptManager {
         console.log('✅ Visual indicators updated with scores');
     }
 
-    /**
-     * Analyze all detected products with controlled concurrency
-     * Uses maxConcurrentAnalyses to avoid overwhelming Chrome's AI API
-     * Shows scores as they complete
-     * @returns {Promise<void>}
-     */
-    async analyzeDetectedProductsInParallel() {
-        console.log('🚀 analyzeDetectedProductsInParallel called');
-        console.log('   Detected products:', this.detectedProducts.length);
-        console.log('   Max concurrent analyses:', this.maxConcurrentAnalyses);
-
-        if (!this.styleProfile || this.detectedProducts.length === 0) {
-            return;
-        }
-
-        const productImages = this.detectedProducts.map(product => product.element);
-        console.log(`⚡ Starting controlled parallel analysis of ${productImages.length} products...`);
-
-        // Track active analyses
-        let activeAnalyses = 0;
-        let completedCount = 0;
-        let currentIndex = 0;
-
-        // Create a promise that resolves when all products are analyzed
-        await new Promise((resolve) => {
-            const startNextAnalysis = async () => {
-                // Check if we're done
-                if (currentIndex >= productImages.length && activeAnalyses === 0) {
-                    resolve();
-                    return;
-                }
-
-                // Start new analyses up to the concurrency limit
-                while (currentIndex < productImages.length && activeAnalyses < this.maxConcurrentAnalyses) {
-                    const index = currentIndex;
-                    const img = productImages[index];
-                    currentIndex++;
-                    activeAnalyses++;
-
-                    console.log(`🔄 Starting analysis ${index + 1}/${productImages.length} (${activeAnalyses} active)`);
-
-                    // Analyze this product (don't await - let it run in background)
-                    this.productAnalyzer.analyzeProduct(img, this.styleProfile)
-                        .then((result) => {
-                            // Store result
-                            this.productAnalysisResults.set(img, result);
-
-                            // Update visual indicator immediately (replace loading with score)
-                            const product = this.detectedProducts[index];
-                            if (product && product.element) {
-                                // Only show badge if analysis was successful (not a fallback)
-                                const isFallback = result.success === false ||
-                                                  (result.method && result.method.includes('fallback'));
-
-                                if (isFallback) {
-                                    console.log(`   ⚠️ Product ${index + 1} returned fallback - keeping loading indicator`);
-                                } else {
-                                    this.visualIndicators.addScoreOverlay(
-                                        product.element,
-                                        result.score,
-                                        result.reasoning,
-                                        index,
-                                        this.currentRankingMode
-                                    );
-
-                                    console.log(`✅ Product ${index + 1}/${productImages.length} score: ${result.score}/10 (${completedCount} completed)`);
-                                }
-                                completedCount++;
-                            }
-                        })
-                        .catch((error) => {
-                            console.error(`❌ Failed to analyze product ${index + 1}:`, error);
-                            completedCount++;
-                        })
-                        .finally(() => {
-                            // Analysis complete (success or failure)
-                            activeAnalyses--;
-                            console.log(`📊 Analysis complete. Active: ${activeAnalyses}, Completed: ${completedCount}/${productImages.length}`);
-
-                            // Start next analysis
-                            startNextAnalysis();
-                        });
-                }
-            };
-
-            // Start initial batch of analyses
-            startNextAnalysis();
-        });
-
-        console.log(`✅ All ${productImages.length} product analyses complete!`);
-    }
 
     /**
      * Calculate average score from analysis results
@@ -948,7 +940,7 @@ export class ContentScriptManager {
      */
     clearProductAnalysis() {
         this.productAnalysisResults.clear();
-        this.productAnalyzer.clearCache();
+        this.personalStyleMatcher.clearCache();
         console.log('🧹 Product analysis data cleared');
     }
 
@@ -1042,10 +1034,8 @@ export class ContentScriptManager {
         // Clear current state
         this.clearProductDetection();
 
-        // Re-initialize for new page
-        setTimeout(() => {
-            this.initializeForPageType();
-        }, 1000);
+        // Run detection on new page
+        this.runInitialDetection();
     }
 
     /**
@@ -1147,26 +1137,23 @@ export class ContentScriptManager {
     async handleApplyPrompt(prompt) {
         console.log('🔍 handleApplyPrompt called with:', prompt);
 
-        // Update state FIRST before clearing anything
+        // Update state
         this.currentRankingMode = 'prompt';
         this.userPrompt = prompt;
 
-        // Replace score badges with loading indicators BEFORE clearing cache
+        // Show loading indicators
         if (this.detectedProducts.length > 0) {
-            console.log('🔄 Replacing score badges with loading indicators...');
+            console.log('🔄 Showing loading indicators for prompt analysis...');
             this.visualIndicators.replaceScoresWithLoadingIndicators();
         }
 
-        // CRITICAL: Clear ALL analysis results to force fresh analysis
-        // This prevents stale 1-10 scores from being treated as 1-3 tiers
-        console.log('🧹 Clearing ALL analysis results for fresh prompt analysis...');
-        this.productAnalysisResults.clear(); // Clear displayed results (CRITICAL!)
-        this.promptRankingEngine.clearCache(); // Clear prompt cache
-        this.productAnalyzer.clearCache(); // Clear style cache too (prevent stale scores)
+        // Clear prompt cache (but keep background style analysis intact)
+        console.log('🧹 Clearing prompt cache...');
+        this.productSearchMatcher.clearCache();
 
-        // Re-analyze all detected products with new prompt
+        // Run prompt analysis and display results
         if (this.detectedProducts.length > 0) {
-            console.log('🔄 Re-analyzing products with prompt...');
+            console.log('🔄 Analyzing products with prompt...');
             await this.analyzeDetectedProducts();
         } else {
             console.log('ℹ️ No detected products to analyze');
@@ -1180,30 +1167,35 @@ export class ContentScriptManager {
     async handleSwitchToStyleMode() {
         console.log('✨ handleSwitchToStyleMode called');
 
-        // Update state FIRST before clearing anything
+        // Update state
         this.currentRankingMode = 'style';
         this.userPrompt = '';
 
-        // Replace score badges with loading indicators BEFORE clearing cache
-        if (this.detectedProducts.length > 0 && this.styleProfile) {
-            console.log('🔄 Replacing score badges with loading indicators...');
-            this.visualIndicators.replaceScoresWithLoadingIndicators();
-        }
-
-        // Clear prompt-related cache and displayed results
+        // Clear prompt-related cache
         console.log('🧹 Clearing prompt analysis cache...');
-        this.promptRankingEngine.clearCache(); // Clear prompt cache
-        this.productAnalysisResults.clear(); // Clear displayed results (forces fresh lookup from productAnalyzer cache)
-        // NOTE: productAnalyzer cache is preserved - will use cached scores if available
+        this.productSearchMatcher.clearCache();
 
-        // Re-analyze with style profile if available
-        if (this.styleProfile && this.detectedProducts.length > 0) {
-            console.log('🔄 Re-analyzing products with style profile (using cache if available)...');
-            await this.analyzeDetectedProducts();
+        // Show style scores from background analysis
+        if (this.detectedProducts.length > 0 && this.styleProfile) {
+            console.log('🎨 Displaying style scores...');
+            
+            // Get stored style analysis results
+            const styleResults = this.detectedProducts.map(product => 
+                this.productAnalysisResults.get(product.element)
+            );
+
+            // If we have cached results, show them
+            if (styleResults.every(r => r)) {
+                this.updateProductScores(styleResults);
+            } else {
+                // No background analysis yet - run it now
+                console.log('⚠️ No background analysis found - running now...');
+                await this.analyzeInBackground();
+            }
         } else if (!this.styleProfile) {
-            console.log('ℹ️ No style profile available for analysis');
+            console.log('ℹ️ No style profile available');
         } else {
-            console.log('ℹ️ No detected products to analyze');
+            console.log('ℹ️ No detected products');
         }
     }
 
@@ -1218,17 +1210,15 @@ export class ContentScriptManager {
         this.currentRankingMode = 'off';
         this.userPrompt = '';
 
-        // Clear all caches
-        console.log('🧹 Clearing all analysis caches...');
-        this.productAnalysisResults.clear();
-        this.promptRankingEngine.clearCache();
-        this.productAnalyzer.clearCache();
+        // Clear prompt cache only (keep background style analysis)
+        console.log('🧹 Clearing prompt cache...');
+        this.productSearchMatcher.clearCache();
 
-        // Remove all visual indicators from page
-        console.log('🧹 Removing visual indicators...');
+        // Remove all visual indicators from page (but keep data)
+        console.log('🧹 Hiding visual indicators...');
         this.visualIndicators.clearAllIndicators();
 
-        console.log('✅ Extension disabled - all filters removed');
+        console.log('✅ Extension disabled - UI hidden (background analysis preserved)');
     }
 }
 

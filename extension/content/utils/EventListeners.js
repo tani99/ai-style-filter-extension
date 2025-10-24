@@ -337,7 +337,7 @@ export class EventListeners {
                 const hasNewVisibleImages = entries.some(entry =>
                     entry.isIntersecting &&
                     entry.target.tagName === 'IMG' &&
-                    !entry.target.dataset.aiStyleDetected
+                    !entry.target.dataset.clothingItemDetected  // undefined = not yet analyzed
                 );
 
                 if (hasNewVisibleImages) {

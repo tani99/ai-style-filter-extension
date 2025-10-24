@@ -107,7 +107,7 @@ export class ImageDetector {
                                 imageInfo: imageInfo,
                                 reason: isClothing.reasoning || 'AI detected as clothing',
                                 confidence: isClothing.confidence || 0.8,
-                                method: isClothing.method || 'ai_classification'
+                                method: isClothing.method || 'ai_clothing_detection'  // More specific: indicates clothing detection
                             };
                         } else {
                             console.log(`❌ Image ${globalIndex + 1} rejected (AI): ${imageInfo.alt || imageInfo.srcShort} - ${isClothing.reasoning || 'AI rejected as non-clothing'}`);
@@ -117,7 +117,7 @@ export class ImageDetector {
                                 imageInfo: imageInfo,
                                 reason: isClothing.reasoning || 'AI rejected as non-clothing',
                                 confidence: isClothing.confidence || 0.8,
-                                method: isClothing.method || 'ai_classification'
+                                method: isClothing.method || 'ai_clothing_detection'  // More specific: indicates clothing detection
                             };
                         }
                     } catch (error) {
@@ -156,12 +156,13 @@ export class ImageDetector {
         allResults.forEach(result => {
             if (result.type === 'detected') {
                 detectedImages.push(result);
-                // Mark image element as detected
-                result.element.dataset.aiStyleDetected = 'true';
+                // Mark image element as clothing item
+                // 'true' = is clothing, 'false' = not clothing, undefined = not analyzed
+                result.element.dataset.clothingItemDetected = 'true';
                 result.element.dataset.aiStyleIndex = detectedImages.length - 1;
             } else {
                 rejectedImages.push(result);
-                result.element.dataset.aiStyleDetected = 'false';
+                result.element.dataset.clothingItemDetected = 'false';  // Not a clothing item
             }
         });
 
@@ -181,7 +182,8 @@ export class ImageDetector {
      */
     async detectNewImages() {
         const allCandidates = this.candidateFinder.findCandidateImages();
-        const newCandidates = allCandidates.filter(img => !img.dataset.aiStyleDetected);
+        // Only analyze images that haven't been checked yet (undefined = not analyzed)
+        const newCandidates = allCandidates.filter(img => !img.dataset.clothingItemDetected);
 
         if (newCandidates.length === 0) {
             console.log('📸 No new images to detect');
@@ -236,7 +238,7 @@ export class ImageDetector {
                         imageInfo: imageInfo,
                         reason: isClothing.reasoning,
                         confidence: isClothing.confidence || 0.8,
-                        method: isClothing.method || 'ai_classification'
+                        method: isClothing.method || 'ai_clothing_detection'  // More specific: indicates clothing detection
                     };
                 } catch (error) {
                     console.log(`⚠️ AI analysis failed for new image ${i + 1}:`, error);
@@ -263,12 +265,12 @@ export class ImageDetector {
 
         // Update existing detected products list
         if (newDetectedImages.length > 0) {
-            const existingDetectedImages = document.querySelectorAll('[data-ai-style-detected="true"]');
+            const existingDetectedImages = document.querySelectorAll('[data-clothing-item-detected="true"]');
             const startIndex = existingDetectedImages.length;
 
             newDetectedImages.forEach((result, localIndex) => {
                 const index = startIndex + localIndex;
-                result.element.dataset.aiStyleDetected = 'true';
+                result.element.dataset.clothingItemDetected = 'true';  // Confirmed clothing item
                 result.element.dataset.aiStyleIndex = index;
             });
 
@@ -277,7 +279,7 @@ export class ImageDetector {
 
         // Mark rejected images
         newRejectedImages.forEach(result => {
-            result.element.dataset.aiStyleDetected = 'false';
+            result.element.dataset.clothingItemDetected = 'false';  // Not a clothing item
         });
 
         console.log(`✅ New image detection complete:`);

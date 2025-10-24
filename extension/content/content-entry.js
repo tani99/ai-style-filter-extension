@@ -13,7 +13,8 @@ import { ContentScriptManager } from './core/ContentScriptManager.js';
 import { AIAnalysisEngine } from './ai/AIAnalysisEngine.js';
 import { AltTextAnalyzer } from './ai/AltTextAnalyzer.js';
 import { ImageClassifier } from './ai/ImageClassifier.js';
-import { ProductAnalyzer } from './ai/ProductAnalyzer.js';
+import { PersonalStyleMatcher } from './ai/PersonalStyleMatcher.js';
+import { ProductSearchMatcher } from './ai/ProductSearchMatcher.js';
 
 // Import detection modules
 import { ImageDetector } from './detection/ImageDetector.js';
@@ -41,7 +42,8 @@ window.ContentScriptManager = ContentScriptManager;
 window.AIAnalysisEngine = AIAnalysisEngine;
 window.AltTextAnalyzer = AltTextAnalyzer;
 window.ImageClassifier = ImageClassifier;
-window.ProductAnalyzer = ProductAnalyzer;
+window.PersonalStyleMatcher = PersonalStyleMatcher;
+window.ProductSearchMatcher = ProductSearchMatcher;
 window.ImageDetector = ImageDetector;
 window.QuickExclusion = QuickExclusion;
 window.CandidateFinder = CandidateFinder;

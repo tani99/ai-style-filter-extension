@@ -174,6 +174,11 @@ class GeminiAPIManager {
             console.log('🖼️ User photo data length:', userPhotoData.length);
             console.log('🖼️ Clothing image data length:', clothingImageData.length);
 
+            // Log outfit description if provided
+            if (options.outfitDescription) {
+                console.log('👗 Using outfit description:', options.outfitDescription.substring(0, 100) + '...');
+            }
+
             // Create prompt for virtual try-on IMAGE GENERATION
             const prompt = this.createImageGenerationPrompt(options);
 
@@ -376,7 +381,18 @@ class GeminiAPIManager {
     // Create prompt for image generation virtual try-on
     // Following Gemini API docs: "Describe the scene, don't just list keywords"
     createImageGenerationPrompt(options = {}) {
-        return `The first image is an image of me. Generate an image of me wearing the clothing item in the second image.`;
+        const { outfitDescription } = options;
+
+        // Base prompt
+        let prompt = `The first image is an image of me. Generate an image of me wearing the clothing item in the second image.`;
+
+        // Add detailed outfit description if available
+        if (outfitDescription) {
+            prompt += `\n\nThe clothing item is: ${outfitDescription}`;
+            prompt += `\n\nPlease accurately recreate all the details mentioned in the description, including colors, patterns, style, cut, and design features.`;
+        }
+
+        return prompt;
     }
 
     // Create prompt for virtual try-on analysis (text-based)

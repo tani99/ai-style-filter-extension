@@ -5,16 +5,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mode selector elements
     const modeOff = document.getElementById('modeOff');
     const modeStyle = document.getElementById('modeStyle');
-    const modePrompt = document.getElementById('modePrompt');
+    // const modePrompt = document.getElementById('modePrompt'); // Search mode disabled
     const modeStatus = document.getElementById('modeStatus');
     const modeStatusText = document.getElementById('modeStatusText');
     
-    // Prompt section elements
-    const promptSection = document.getElementById('promptSection');
-    const promptInput = document.getElementById('promptInput');
-    const applyPromptBtn = document.getElementById('applyPromptBtn');
-    const recentPromptsSection = document.getElementById('recentPrompts');
-    const recentPromptsList = document.getElementById('recentPromptsList');
+    // Prompt section elements (disabled, kept for potential future use)
+    // const promptSection = document.getElementById('promptSection');
+    // const promptInput = document.getElementById('promptInput');
+    // const applyPromptBtn = document.getElementById('applyPromptBtn');
+    // const recentPromptsSection = document.getElementById('recentPrompts');
+    // const recentPromptsList = document.getElementById('recentPromptsList');
     
     // Sensitivity slider elements
     const sensitivitySection = document.getElementById('sensitivitySection');
@@ -45,11 +45,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Search/prompt mode disabled
+    /*
     modePrompt.addEventListener('change', function() {
         if (modePrompt.checked) {
             handleModeChange('prompt');
         }
     });
+    */
 
     // Handle sensitivity slider changes
     sensitivitySlider.addEventListener('input', function() {
@@ -65,7 +68,8 @@ document.addEventListener('DOMContentLoaded', function() {
         sendFilterStateToContentScript(filterState);
     });
 
-    // Prompt input handlers
+    // Prompt input handlers - DISABLED (search mode disabled)
+    /*
     promptInput.addEventListener('input', function() {
         const hasInput = promptInput.value.trim().length > 0;
         applyPromptBtn.disabled = !hasInput;
@@ -112,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
             statusText.textContent = 'Error applying prompt';
         }
     });
+    */
 
     /**
      * Handle mode change
@@ -172,17 +177,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     statusText.textContent = 'Ready to filter your style!';
                 }, 2000);
 
+            // Prompt mode disabled
+            /*
             } else if (mode === 'prompt') {
                 // Show prompt section
                 updateModeStatus('prompt');
-                
+
                 // If there's already a prompt, keep it
                 const result = await chrome.storage.local.get(['userPrompt']);
                 if (result.userPrompt) {
                     promptInput.value = result.userPrompt;
                     applyPromptBtn.disabled = false;
                     updateModeStatus('prompt', result.userPrompt);
-                    
+
                     await chrome.storage.local.set({
                         extensionEnabled: true
                     });
@@ -190,6 +197,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     // No prompt yet, just show the section
                     statusText.textContent = 'Enter a search query and click Apply';
                 }
+            }
+            */
             }
 
         } catch (error) {
@@ -217,15 +226,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const rankingMode = result.rankingMode || 'off';
             const userPrompt = result.userPrompt || '';
 
-            // Set mode selector based on state
+            // Set mode selector based on state (prompt mode disabled)
             if (!extensionEnabled || rankingMode === 'off') {
                 modeOff.checked = true;
                 updateModeStatus('off');
             } else if (rankingMode === 'prompt' && userPrompt) {
-                modePrompt.checked = true;
-                promptInput.value = userPrompt;
-                applyPromptBtn.disabled = false;
-                updateModeStatus('prompt', userPrompt);
+                // Prompt mode is disabled, default to off instead
+                console.log('[Popup] Prompt mode is disabled, defaulting to off');
+                modeOff.checked = true;
+                updateModeStatus('off');
             } else if (rankingMode === 'style') {
                 modeStyle.checked = true;
                 updateModeStatus('style');
@@ -241,10 +250,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 sensitivityValue.textContent = `${sensitivitySlider.value}/10`;
             }
 
-            // Show recent prompts if any
-            if (result.recentPrompts && result.recentPrompts.length > 0) {
-                displayRecentPrompts(result.recentPrompts);
-            }
+            // Recent prompts disabled
+            // if (result.recentPrompts && result.recentPrompts.length > 0) {
+            //     displayRecentPrompts(result.recentPrompts);
+            // }
 
         } catch (error) {
             console.error('[Popup] Error loading state:', error);
@@ -257,15 +266,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateModeStatus(mode, prompt = '') {
         // Show/hide sections based on mode
         if (mode === 'off') {
-            promptSection.style.display = 'none';
+            // promptSection.style.display = 'none'; // disabled
             sensitivitySection.style.display = 'none';
             modeStatus.classList.remove('active');
             modeStatusText.textContent = '⏸️ Extension is off';
         } else if (mode === 'style') {
-            promptSection.style.display = 'none';
+            // promptSection.style.display = 'none'; // disabled
             sensitivitySection.style.display = 'block';
             modeStatus.classList.add('active');
             modeStatusText.textContent = '✨ Filtering by your style profile';
+        }
+        // Prompt mode disabled
+        /*
         } else if (mode === 'prompt') {
             promptSection.style.display = 'block';
             sensitivitySection.style.display = 'none';
@@ -277,11 +289,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 modeStatusText.textContent = '🔍 Enter a search query below';
             }
         }
+        */
     }
 
+    // Recent prompts functionality - DISABLED (search mode disabled)
+    /*
     /**
      * Update recent prompts in storage
-     */
+     * /
     async function updateRecentPrompts(prompt) {
         try {
             const { recentPrompts = [] } = await chrome.storage.local.get(['recentPrompts']);
@@ -304,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /**
      * Display recent prompts as clickable chips
-     */
+     * /
     function displayRecentPrompts(prompts) {
         if (!prompts || prompts.length === 0) {
             recentPromptsSection.style.display = 'none';
@@ -328,6 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         recentPromptsSection.style.display = 'block';
     }
+    */
 
     /**
      * Save filter state
