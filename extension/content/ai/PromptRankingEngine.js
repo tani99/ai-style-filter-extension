@@ -1,6 +1,7 @@
 /**
  * PromptRankingEngine analyzes detected product images against user's text prompt
  * and provides compatibility scores using Chrome's built-in AI Prompt API
+ * Uses actual image classification for accurate matching
  */
 export class PromptRankingEngine {
     constructor() {
@@ -8,6 +9,7 @@ export class PromptRankingEngine {
         this.maxCacheSize = 100;
         this.isInitialized = false;
         this.pendingAnalyses = new Map();
+        this.isImageClassifierAvailable = false;
     }
 
     /**
@@ -69,6 +71,27 @@ export class PromptRankingEngine {
             console.log('✅ Test session created successfully');
             testSession.destroy();
             console.log('✅ Test session destroyed');
+
+            // Check if image classification API is available
+            console.log('🔧 Checking image classification API...');
+            this.isImageClassifierAvailable = typeof window !== 'undefined' &&
+                                              window.ai &&
+                                              typeof window.ai.createImageClassifier === 'function';
+
+            if (this.isImageClassifierAvailable) {
+                console.log('✅ Image classification API available');
+                // Test it
+                try {
+                    const testClassifier = await window.ai.createImageClassifier();
+                    testClassifier.destroy();
+                    console.log('✅ Image classification test successful');
+                } catch (error) {
+                    console.warn('⚠️ Image classification test failed:', error.message);
+                    this.isImageClassifierAvailable = false;
+                }
+            } else {
+                console.warn('⚠️ Image classification API not available - will use alt text only');
+            }
 
             this.isInitialized = true;
             console.log('✅ PromptRankingEngine initialized successfully');
@@ -144,9 +167,9 @@ export class PromptRankingEngine {
         console.log('📝 _performPromptAnalysis started');
 
         try {
-            // Build analysis prompt
-            console.log('🔨 Building prompt analysis prompt...');
-            const prompt = this.buildPromptAnalysisPrompt(productImage, userPrompt);
+            // Build analysis prompt (now async because it classifies the image)
+            console.log('🔨 Building prompt analysis prompt with image classification...');
+            const prompt = await this.buildPromptAnalysisPrompt(productImage, userPrompt);
             console.log('📄 Prompt built (length: ' + prompt.length + ' chars)');
             console.log('📄 Full prompt:\n', prompt);
 
@@ -252,13 +275,89 @@ export class PromptRankingEngine {
     }
 
     /**
-     * Build analysis prompt for prompt-based ranking
+     * Classify image using Chrome's image classification API
+     * @param {HTMLImageElement} img - Image to classify
+     * @returns {Promise<Object>} Classification results
      * @private
      */
-    buildPromptAnalysisPrompt(productImage, userPrompt) {
+    async classifyImage(img) {
+        if (!this.isImageClassifierAvailable) {
+            return null;
+        }
+
+        try {
+            // Create image classifier
+            const classifier = await window.ai.createImageClassifier();
+
+            // Create canvas for image processing
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas size (224x224 is standard for image classification)
+            const maxSize = 224;
+            const naturalWidth = img.naturalWidth || img.width || maxSize;
+            const naturalHeight = img.naturalHeight || img.height || maxSize;
+
+            // Maintain aspect ratio
+            const aspectRatio = naturalWidth / naturalHeight;
+            if (naturalWidth > naturalHeight) {
+                canvas.width = Math.min(naturalWidth, maxSize);
+                canvas.height = Math.min(naturalHeight, maxSize / aspectRatio);
+            } else {
+                canvas.width = Math.min(naturalWidth, maxSize * aspectRatio);
+                canvas.height = Math.min(naturalHeight, maxSize);
+            }
+
+            // Draw image to canvas
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Get image data
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Classify the image
+            const results = await classifier.classify(imageData);
+
+            // Clean up
+            classifier.destroy();
+
+            // Get top 3 results
+            const sortedResults = results.sort((a, b) => b.confidence - a.confidence).slice(0, 3);
+
+            return {
+                success: true,
+                classifications: sortedResults.map(r => ({
+                    label: r.label,
+                    confidence: Math.round(r.confidence * 100)
+                }))
+            };
+
+        } catch (error) {
+            console.warn('Image classification failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Build analysis prompt for prompt-based ranking
+     * Includes actual image classification results if available
+     * @private
+     */
+    async buildPromptAnalysisPrompt(productImage, userPrompt) {
         // Get image context
         const altText = productImage.alt || '';
         const imageContext = this.extractImageContext(productImage);
+
+        // Try to classify the actual image
+        const imageClassification = await this.classifyImage(productImage);
+
+        // Build classification info for the prompt
+        let classificationInfo = '';
+        if (imageClassification && imageClassification.classifications.length > 0) {
+            classificationInfo = '\nIMAGE CLASSIFICATION (AI analyzed actual image pixels):';
+            imageClassification.classifications.forEach((c, i) => {
+                classificationInfo += `\n  ${i + 1}. ${c.label} (${c.confidence}% confidence)`;
+            });
+        }
 
         const prompt = `Analyze this clothing item for how well it matches this specific search request:
 
@@ -266,13 +365,13 @@ USER IS LOOKING FOR: "${userPrompt}"
 
 IMAGE CONTEXT:
 - Alt text: "${altText}"
-- ${imageContext}
+- ${imageContext}${classificationInfo}
 
 TASK:
 Rate how well this item matches the user's specific request using ONLY these 3 tiers:
-- TIER 1 (BAD): Does not match the request at all (wrong item type, color, or style)
-- TIER 2 (FINE): Partially matches but missing key attributes from the request
-- TIER 3 (GOOD): Strong match - closely matches what the user is looking for
+- TIER 1 (NO): Does not match the request at all (wrong item type, color, or style)
+- TIER 2 (MAYBE): Partially matches but missing key attributes from the request
+- TIER 3 (YES): Strong match - closely matches what the user is looking for
 
 Be DECISIVE and specific. Consider:
 - Item type match (e.g., if user wants "dress", this should be a dress)
@@ -282,10 +381,12 @@ Be DECISIVE and specific. Consider:
 - Overall relevance to the search query
 
 IMPORTANT RULES:
-- Use ONLY the information from the alt text and context provided
-- DO NOT make assumptions about details not mentioned
-- If the alt text clearly describes the item and it matches the request: TIER 3
-- If the alt text describes the item but it doesn't match: TIER 1
+- PRIORITIZE the image classification results (actual AI analysis of pixels) over alt text
+- If image classification shows labels that match the user's request: higher tier likely
+- If image classification shows labels that conflict with the request: lower tier likely
+- Use alt text as secondary information to supplement the classification
+- If the image classification clearly matches the request: TIER 3
+- If the image classification conflicts with the request: TIER 1
 - If information is limited or ambiguous: TIER 2
 
 Respond in this exact format:

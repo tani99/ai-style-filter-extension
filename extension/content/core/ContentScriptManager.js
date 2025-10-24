@@ -503,15 +503,24 @@ export class ContentScriptManager {
 
                             const product = newProducts[localIndex];
                             if (product && product.element) {
-                                this.visualIndicators.addScoreOverlay(
-                                    product.element,
-                                    result.score,
-                                    result.reasoning,
-                                    globalIndex
-                                );
+                                // Only show badge if analysis was successful (not a fallback)
+                                const isFallback = result.success === false ||
+                                                  (result.method && result.method.includes('fallback'));
 
+                                if (isFallback) {
+                                    console.log(`   ⚠️ New product ${globalIndex + 1} returned fallback - keeping loading indicator`);
+                                } else {
+                                    this.visualIndicators.addScoreOverlay(
+                                        product.element,
+                                        result.score,
+                                        result.reasoning,
+                                        globalIndex,
+                                        this.currentRankingMode
+                                    );
+
+                                    console.log(`✅ New product ${globalIndex + 1} score: ${result.score}/10`);
+                                }
                                 completedCount++;
-                                console.log(`✅ New product ${globalIndex + 1} score: ${result.score}/10`);
                             }
                         })
                         .catch((error) => {
@@ -669,25 +678,32 @@ export class ContentScriptManager {
 
             console.log('✅ Batch analysis complete, results:', analysisResults);
 
-            // Normalize results: convert tier (1-3) to score (1-10) if using prompt mode
-            const normalizedResults = analysisResults.map(result => {
-                if (this.currentRankingMode === 'prompt' && result.tier !== undefined) {
-                    // Convert tier to score:
-                    // Tier 1 (bad) -> Score 1-3
-                    // Tier 2 (fine) -> Score 4-6
-                    // Tier 3 (good) -> Score 7-10
-                    const tierToScoreMap = {
-                        1: 2,  // Bad tier -> low score
-                        2: 5,  // Fine tier -> medium score
-                        3: 9   // Good tier -> high score
-                    };
-
-                    return {
-                        ...result,
-                        score: tierToScoreMap[result.tier] || 5,
-                        tier: result.tier // Keep tier for debugging
-                    };
+            // Keep results as-is without normalization
+            // Prompt mode uses tier (1-3), Style mode uses score (1-10)
+            const normalizedResults = analysisResults.map((result, idx) => {
+                if (this.currentRankingMode === 'prompt') {
+                    if (result.tier !== undefined) {
+                        // For prompt mode: use tier directly (1-3 scale)
+                        console.log(`   🔄 Normalizing product ${idx + 1}: tier ${result.tier} -> score ${result.tier}`);
+                        return {
+                            ...result,
+                            score: result.tier // Use tier as score (1-3)
+                        };
+                    } else {
+                        // ERROR: In prompt mode but no tier returned!
+                        console.error(`   ❌ Product ${idx + 1}: Prompt mode but result has no tier!`, result);
+                        console.error(`   This should not happen - prompt analysis should return tier (1-3)`);
+                        // Fallback to tier 2 (maybe)
+                        return {
+                            ...result,
+                            score: 2,
+                            tier: 2,
+                            reasoning: result.reasoning || 'Analysis error - neutral tier'
+                        };
+                    }
                 }
+                // For style mode: score is already set (1-10 scale)
+                console.log(`   ✨ Style mode product ${idx + 1}: score ${result.score} (no normalization)`);
                 return result;
             });
 
@@ -779,14 +795,31 @@ export class ContentScriptManager {
             });
 
             if (product && product.element) {
-                console.log(`   Adding score overlay for product ${index + 1}`);
-                // Add score overlay to product
-                this.visualIndicators.addScoreOverlay(
-                    product.element,
-                    result.score,
-                    result.reasoning,
-                    index
-                );
+                // Only show badge if analysis was successful (not a fallback)
+                const isFallback = result.success === false ||
+                                  (result.method && result.method.includes('fallback'));
+
+                if (isFallback) {
+                    console.log(`   ⚠️ Product ${index + 1} returned fallback result - keeping loading indicator`);
+                    // Keep the loading indicator, don't replace it with a fallback badge
+                } else {
+                    console.log(`   ✏️ Calling addScoreOverlay for product ${index + 1}:`, {
+                        score: result.score,
+                        scoreType: typeof result.score,
+                        reasoning: result.reasoning?.substring(0, 50),
+                        mode: this.currentRankingMode,
+                        tier: result.tier,
+                        imgAlt: product.element.alt
+                    });
+                    // Add score overlay to product
+                    this.visualIndicators.addScoreOverlay(
+                        product.element,
+                        result.score,
+                        result.reasoning,
+                        index,
+                        this.currentRankingMode
+                    );
+                }
             } else {
                 console.warn(`   ⚠️ Cannot add score overlay - missing product or element at index ${index}`);
             }
@@ -845,15 +878,24 @@ export class ContentScriptManager {
                             // Update visual indicator immediately (replace loading with score)
                             const product = this.detectedProducts[index];
                             if (product && product.element) {
-                                this.visualIndicators.addScoreOverlay(
-                                    product.element,
-                                    result.score,
-                                    result.reasoning,
-                                    index
-                                );
+                                // Only show badge if analysis was successful (not a fallback)
+                                const isFallback = result.success === false ||
+                                                  (result.method && result.method.includes('fallback'));
 
+                                if (isFallback) {
+                                    console.log(`   ⚠️ Product ${index + 1} returned fallback - keeping loading indicator`);
+                                } else {
+                                    this.visualIndicators.addScoreOverlay(
+                                        product.element,
+                                        result.score,
+                                        result.reasoning,
+                                        index,
+                                        this.currentRankingMode
+                                    );
+
+                                    console.log(`✅ Product ${index + 1}/${productImages.length} score: ${result.score}/10 (${completedCount} completed)`);
+                                }
                                 completedCount++;
-                                console.log(`✅ Product ${index + 1}/${productImages.length} score: ${result.score}/10 (${completedCount} completed)`);
                             }
                         })
                         .catch((error) => {
@@ -1105,14 +1147,22 @@ export class ContentScriptManager {
     async handleApplyPrompt(prompt) {
         console.log('🔍 handleApplyPrompt called with:', prompt);
 
-        // Update state
+        // Update state FIRST before clearing anything
         this.currentRankingMode = 'prompt';
         this.userPrompt = prompt;
 
-        // Clear existing analysis cache
-        console.log('🧹 Clearing analysis caches...');
-        this.productAnalysisResults.clear();
-        this.promptRankingEngine.clearCache();
+        // Replace score badges with loading indicators BEFORE clearing cache
+        if (this.detectedProducts.length > 0) {
+            console.log('🔄 Replacing score badges with loading indicators...');
+            this.visualIndicators.replaceScoresWithLoadingIndicators();
+        }
+
+        // CRITICAL: Clear ALL analysis results to force fresh analysis
+        // This prevents stale 1-10 scores from being treated as 1-3 tiers
+        console.log('🧹 Clearing ALL analysis results for fresh prompt analysis...');
+        this.productAnalysisResults.clear(); // Clear displayed results (CRITICAL!)
+        this.promptRankingEngine.clearCache(); // Clear prompt cache
+        this.productAnalyzer.clearCache(); // Clear style cache too (prevent stale scores)
 
         // Re-analyze all detected products with new prompt
         if (this.detectedProducts.length > 0) {
@@ -1130,24 +1180,55 @@ export class ContentScriptManager {
     async handleSwitchToStyleMode() {
         console.log('✨ handleSwitchToStyleMode called');
 
-        // Update state
+        // Update state FIRST before clearing anything
         this.currentRankingMode = 'style';
         this.userPrompt = '';
 
-        // Clear prompt analysis cache
+        // Replace score badges with loading indicators BEFORE clearing cache
+        if (this.detectedProducts.length > 0 && this.styleProfile) {
+            console.log('🔄 Replacing score badges with loading indicators...');
+            this.visualIndicators.replaceScoresWithLoadingIndicators();
+        }
+
+        // Clear prompt-related cache and displayed results
         console.log('🧹 Clearing prompt analysis cache...');
-        this.promptRankingEngine.clearCache();
-        this.productAnalysisResults.clear();
+        this.promptRankingEngine.clearCache(); // Clear prompt cache
+        this.productAnalysisResults.clear(); // Clear displayed results (forces fresh lookup from productAnalyzer cache)
+        // NOTE: productAnalyzer cache is preserved - will use cached scores if available
 
         // Re-analyze with style profile if available
         if (this.styleProfile && this.detectedProducts.length > 0) {
-            console.log('🔄 Re-analyzing products with style profile...');
+            console.log('🔄 Re-analyzing products with style profile (using cache if available)...');
             await this.analyzeDetectedProducts();
         } else if (!this.styleProfile) {
             console.log('ℹ️ No style profile available for analysis');
         } else {
             console.log('ℹ️ No detected products to analyze');
         }
+    }
+
+    /**
+     * Handle extension disable (turn off mode)
+     * @returns {Promise<void>}
+     */
+    async handleDisableExtension() {
+        console.log('⏸️ handleDisableExtension called');
+
+        // Update state
+        this.currentRankingMode = 'off';
+        this.userPrompt = '';
+
+        // Clear all caches
+        console.log('🧹 Clearing all analysis caches...');
+        this.productAnalysisResults.clear();
+        this.promptRankingEngine.clearCache();
+        this.productAnalyzer.clearCache();
+
+        // Remove all visual indicators from page
+        console.log('🧹 Removing visual indicators...');
+        this.visualIndicators.clearAllIndicators();
+
+        console.log('✅ Extension disabled - all filters removed');
     }
 }
 

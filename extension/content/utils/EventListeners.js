@@ -204,6 +204,17 @@ export class EventListeners {
                     });
                     return true; // Keep message channel open for async response
 
+                case 'disableExtension':
+                    // Handle extension disable (turn off mode)
+                    console.log('📩 Disabling extension from popup');
+                    this.contentScript.handleDisableExtension().then(() => {
+                        sendResponse({status: 'extension_disabled'});
+                    }).catch(error => {
+                        console.error('Error disabling extension:', error);
+                        sendResponse({status: 'error', message: error.message});
+                    });
+                    return true; // Keep message channel open for async response
+
                 default:
                     sendResponse({status: 'unknown_action'});
             }

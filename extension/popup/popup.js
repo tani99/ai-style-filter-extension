@@ -1,32 +1,55 @@
 document.addEventListener('DOMContentLoaded', function() {
     const openDashboardBtn = document.getElementById('openDashboard');
     const statusText = document.getElementById('statusText');
-    const myStyleToggle = document.getElementById('myStyleToggle');
-    const sensitivitySlider = document.getElementById('sensitivitySlider');
-    const sensitivityValue = document.getElementById('sensitivityValue');
-
-    // Prompt mode elements
+    
+    // Mode selector elements
+    const modeOff = document.getElementById('modeOff');
+    const modeStyle = document.getElementById('modeStyle');
+    const modePrompt = document.getElementById('modePrompt');
+    const modeStatus = document.getElementById('modeStatus');
+    const modeStatusText = document.getElementById('modeStatusText');
+    
+    // Prompt section elements
+    const promptSection = document.getElementById('promptSection');
     const promptInput = document.getElementById('promptInput');
     const applyPromptBtn = document.getElementById('applyPromptBtn');
-    const clearPromptBtn = document.getElementById('clearPromptBtn');
-    const activeModeIndicator = document.getElementById('activeModeIndicator');
-    const activeModeText = document.getElementById('activeModeText');
     const recentPromptsSection = document.getElementById('recentPrompts');
     const recentPromptsList = document.getElementById('recentPromptsList');
+    
+    // Sensitivity slider elements
+    const sensitivitySection = document.getElementById('sensitivitySection');
+    const sensitivitySlider = document.getElementById('sensitivitySlider');
+    const sensitivityValue = document.getElementById('sensitivityValue');
 
     // Handle opening the style dashboard
     openDashboardBtn.addEventListener('click', function() {
         chrome.tabs.create({
             url: chrome.runtime.getURL('tab/tab.html')
         });
-
-        // Close popup after opening dashboard
         window.close();
     });
 
-    // Load filter state and prompt state from storage
-    loadFilterState();
-    loadPromptState();
+    // Load current state from storage
+    loadCurrentState();
+
+    // Mode selector change handlers
+    modeOff.addEventListener('change', function() {
+        if (modeOff.checked) {
+            handleModeChange('off');
+        }
+    });
+
+    modeStyle.addEventListener('change', function() {
+        if (modeStyle.checked) {
+            handleModeChange('style');
+        }
+    });
+
+    modePrompt.addEventListener('change', function() {
+        if (modePrompt.checked) {
+            handleModeChange('prompt');
+        }
+    });
 
     // Handle sensitivity slider changes
     sensitivitySlider.addEventListener('input', function() {
@@ -35,55 +58,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     sensitivitySlider.addEventListener('change', function() {
         const filterState = {
-            mode: myStyleToggle.checked ? 'myStyle' : 'all',
+            mode: 'myStyle', // Always myStyle when sensitivity is being used
             scoreThreshold: parseInt(sensitivitySlider.value)
         };
         saveFilterState(filterState);
         sendFilterStateToContentScript(filterState);
     });
 
-    async function loadFilterState() {
-        try {
-            const result = await chrome.storage.local.get('filterState');
-            if (result.filterState) {
-                const state = result.filterState;
-                myStyleToggle.checked = state.mode === 'myStyle';
-                sensitivitySlider.value = state.scoreThreshold || 6;
-                sensitivityValue.textContent = `${sensitivitySlider.value}/10`;
-                console.log('Loaded filter state:', state);
-            }
-        } catch (error) {
-            console.error('Error loading filter state:', error);
-        }
-    }
-
-    async function saveFilterState(filterState) {
-        try {
-            await chrome.storage.local.set({ filterState });
-            console.log('Saved filter state:', filterState);
-        } catch (error) {
-            console.error('Error saving filter state:', error);
-        }
-    }
-
-    async function sendFilterStateToContentScript(filterState) {
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab) {
-                chrome.tabs.sendMessage(tab.id, {
-                    action: 'updateFilterState',
-                    filterState: filterState
-                });
-                console.log('Sent filter state to content script:', filterState);
-            }
-        } catch (error) {
-            console.error('Error sending filter state:', error);
-        }
-    }
-
-    // Prompt mode handlers
-
-    // Enable/disable apply button based on input
+    // Prompt input handlers
     promptInput.addEventListener('input', function() {
         const hasInput = promptInput.value.trim().length > 0;
         applyPromptBtn.disabled = !hasInput;
@@ -100,7 +82,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Save to storage
             await chrome.storage.local.set({
                 userPrompt: prompt,
-                rankingMode: 'prompt'
+                rankingMode: 'prompt',
+                extensionEnabled: true
             });
 
             // Update recent prompts
@@ -116,9 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Update UI
-            clearPromptBtn.style.display = 'block';
-            myStyleToggle.checked = false;
-            updateActiveModeIndicator('prompt', prompt);
+            updateModeStatus('prompt', prompt);
 
             console.log('[Popup] Prompt applied successfully');
             statusText.textContent = 'Products are being re-ranked...';
@@ -132,83 +113,132 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Clear prompt button handler
-    clearPromptBtn.addEventListener('click', async function() {
-        console.log('[Popup] Clearing prompt');
+    /**
+     * Handle mode change
+     */
+    async function handleModeChange(mode) {
+        console.log('[Popup] Mode changed to:', mode);
 
         try {
-            await chrome.storage.local.set({
-                userPrompt: '',
-                rankingMode: 'style'
-            });
-
-            promptInput.value = '';
-            clearPromptBtn.style.display = 'none';
-            applyPromptBtn.disabled = true;
-            updateActiveModeIndicator('all');
-
-            // Send message to content script to switch back to style mode
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab) {
-                chrome.tabs.sendMessage(tab.id, {
-                    action: 'switchToStyleMode'
+            if (mode === 'off') {
+                // Turn off extension
+                await chrome.storage.local.set({
+                    extensionEnabled: false,
+                    rankingMode: 'off'
                 });
+
+                // Send message to content script to disable
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab) {
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: 'disableExtension'
+                    });
+                }
+
+                updateModeStatus('off');
+                statusText.textContent = 'Extension disabled';
+
+            } else if (mode === 'style') {
+                // Switch to style mode
+                await chrome.storage.local.set({
+                    userPrompt: '',
+                    rankingMode: 'style',
+                    extensionEnabled: true
+                });
+
+                // Clear prompt input
+                promptInput.value = '';
+                applyPromptBtn.disabled = true;
+
+                // Send message to content script to switch to style mode
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab) {
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: 'switchToStyleMode'
+                    });
+                }
+
+                // Update filter state
+                const filterState = {
+                    mode: 'myStyle',
+                    scoreThreshold: parseInt(sensitivitySlider.value)
+                };
+                saveFilterState(filterState);
+                sendFilterStateToContentScript(filterState);
+
+                updateModeStatus('style');
+                statusText.textContent = 'Analyzing with your style profile...';
+                setTimeout(() => {
+                    statusText.textContent = 'Ready to filter your style!';
+                }, 2000);
+
+            } else if (mode === 'prompt') {
+                // Show prompt section
+                updateModeStatus('prompt');
+                
+                // If there's already a prompt, keep it
+                const result = await chrome.storage.local.get(['userPrompt']);
+                if (result.userPrompt) {
+                    promptInput.value = result.userPrompt;
+                    applyPromptBtn.disabled = false;
+                    updateModeStatus('prompt', result.userPrompt);
+                    
+                    await chrome.storage.local.set({
+                        extensionEnabled: true
+                    });
+                } else {
+                    // No prompt yet, just show the section
+                    statusText.textContent = 'Enter a search query and click Apply';
+                }
             }
 
-            statusText.textContent = 'Switched back to all items';
-            setTimeout(() => {
-                statusText.textContent = 'Ready to filter your style!';
-            }, 2000);
-
         } catch (error) {
-            console.error('[Popup] Error clearing prompt:', error);
+            console.error('[Popup] Error changing mode:', error);
+            statusText.textContent = 'Error changing mode';
         }
-    });
+    }
 
-    // My Style toggle handler (updated to clear prompt when enabled)
-    myStyleToggle.addEventListener('change', async function() {
-        if (myStyleToggle.checked) {
-            // Clear prompt mode
-            await chrome.storage.local.set({
-                userPrompt: '',
-                rankingMode: 'style'
-            });
-
-            promptInput.value = '';
-            clearPromptBtn.style.display = 'none';
-            applyPromptBtn.disabled = true;
-        }
-
-        const filterState = {
-            mode: myStyleToggle.checked ? 'myStyle' : 'all',
-            scoreThreshold: parseInt(sensitivitySlider.value)
-        };
-
-        saveFilterState(filterState);
-        sendFilterStateToContentScript(filterState);
-
-        updateActiveModeIndicator(filterState.mode);
-    });
-
-    // Load prompt state from storage
-    async function loadPromptState() {
+    /**
+     * Load current state from storage
+     */
+    async function loadCurrentState() {
         try {
-            const result = await chrome.storage.local.get(['userPrompt', 'rankingMode', 'recentPrompts']);
+            const result = await chrome.storage.local.get([
+                'extensionEnabled',
+                'rankingMode',
+                'userPrompt',
+                'recentPrompts',
+                'filterState'
+            ]);
 
-            console.log('[Popup] Loaded prompt state:', result);
+            console.log('[Popup] Loaded state:', result);
 
-            // Update UI based on current mode
-            if (result.rankingMode === 'prompt' && result.userPrompt) {
-                promptInput.value = result.userPrompt;
+            const extensionEnabled = result.extensionEnabled !== false; // Default to true
+            const rankingMode = result.rankingMode || 'off';
+            const userPrompt = result.userPrompt || '';
+
+            // Set mode selector based on state
+            if (!extensionEnabled || rankingMode === 'off') {
+                modeOff.checked = true;
+                updateModeStatus('off');
+            } else if (rankingMode === 'prompt' && userPrompt) {
+                modePrompt.checked = true;
+                promptInput.value = userPrompt;
                 applyPromptBtn.disabled = false;
-                clearPromptBtn.style.display = 'block';
-                myStyleToggle.checked = false;
-                updateActiveModeIndicator('prompt', result.userPrompt);
-            } else if (result.rankingMode === 'style') {
-                myStyleToggle.checked = true;
-                updateActiveModeIndicator('style');
+                updateModeStatus('prompt', userPrompt);
+            } else if (rankingMode === 'style') {
+                modeStyle.checked = true;
+                updateModeStatus('style');
             } else {
-                updateActiveModeIndicator('all');
+                // Default to off
+                modeOff.checked = true;
+                updateModeStatus('off');
+            }
+
+            // Load sensitivity slider
+            if (result.filterState) {
+                sensitivitySlider.value = result.filterState.scoreThreshold || 6;
+                sensitivityValue.textContent = `${sensitivitySlider.value}/10`;
             }
 
             // Show recent prompts if any
@@ -217,11 +247,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
         } catch (error) {
-            console.error('[Popup] Error loading prompt state:', error);
+            console.error('[Popup] Error loading state:', error);
         }
     }
 
-    // Update recent prompts in storage
+    /**
+     * Update mode status display
+     */
+    function updateModeStatus(mode, prompt = '') {
+        // Show/hide sections based on mode
+        if (mode === 'off') {
+            promptSection.style.display = 'none';
+            sensitivitySection.style.display = 'none';
+            modeStatus.classList.remove('active');
+            modeStatusText.textContent = '⏸️ Extension is off';
+        } else if (mode === 'style') {
+            promptSection.style.display = 'none';
+            sensitivitySection.style.display = 'block';
+            modeStatus.classList.add('active');
+            modeStatusText.textContent = '✨ Filtering by your style profile';
+        } else if (mode === 'prompt') {
+            promptSection.style.display = 'block';
+            sensitivitySection.style.display = 'none';
+            modeStatus.classList.add('active');
+            if (prompt) {
+                const truncated = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+                modeStatusText.textContent = `🔍 Searching: "${truncated}"`;
+            } else {
+                modeStatusText.textContent = '🔍 Enter a search query below';
+            }
+        }
+    }
+
+    /**
+     * Update recent prompts in storage
+     */
     async function updateRecentPrompts(prompt) {
         try {
             const { recentPrompts = [] } = await chrome.storage.local.get(['recentPrompts']);
@@ -242,7 +302,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Display recent prompts as clickable chips
+    /**
+     * Display recent prompts as clickable chips
+     */
     function displayRecentPrompts(prompts) {
         if (!prompts || prompts.length === 0) {
             recentPromptsSection.style.display = 'none';
@@ -267,25 +329,39 @@ document.addEventListener('DOMContentLoaded', function() {
         recentPromptsSection.style.display = 'block';
     }
 
-    // Update active mode indicator
-    function updateActiveModeIndicator(mode, prompt = '') {
-        // Remove all mode classes
-        activeModeIndicator.classList.remove('prompt-mode', 'style-mode', 'all-mode');
-
-        if (mode === 'prompt') {
-            activeModeIndicator.classList.add('prompt-mode');
-            const truncatedPrompt = prompt.length > 25 ? prompt.substring(0, 25) + '...' : prompt;
-            activeModeText.textContent = `🔍 Search: "${truncatedPrompt}"`;
-        } else if (mode === 'style' || mode === 'myStyle') {
-            activeModeIndicator.classList.add('style-mode');
-            activeModeText.textContent = '✨ Mode: My Style';
-        } else {
-            activeModeIndicator.classList.add('all-mode');
-            activeModeText.textContent = 'Mode: All Items';
+    /**
+     * Save filter state
+     */
+    async function saveFilterState(filterState) {
+        try {
+            await chrome.storage.local.set({ filterState });
+            console.log('[Popup] Saved filter state:', filterState);
+        } catch (error) {
+            console.error('[Popup] Error saving filter state:', error);
         }
     }
 
-    // Check extension status
+    /**
+     * Send filter state to content script
+     */
+    async function sendFilterStateToContentScript(filterState) {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab) {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: 'updateFilterState',
+                    filterState: filterState
+                });
+                console.log('[Popup] Sent filter state to content script:', filterState);
+            }
+        } catch (error) {
+            console.error('[Popup] Error sending filter state:', error);
+        }
+    }
+
+    /**
+     * Check extension status
+     */
     checkExtensionStatus();
 
     async function checkExtensionStatus() {
@@ -294,11 +370,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof chrome !== 'undefined' && chrome.ai) {
                 const canCreateSession = await chrome.ai.canCreateTextSession();
                 if (canCreateSession === 'readily') {
-                    statusText.textContent = 'Chrome AI ready!';
+                    statusText.textContent = '✅ Chrome AI ready!';
                 } else if (canCreateSession === 'after-download') {
-                    statusText.textContent = 'Chrome AI downloading...';
+                    statusText.textContent = '⏳ Chrome AI downloading...';
                 } else {
-                    statusText.textContent = 'Chrome AI not available';
+                    statusText.textContent = '❌ Chrome AI not available';
                 }
             } else {
                 statusText.textContent = 'Chrome AI not supported';

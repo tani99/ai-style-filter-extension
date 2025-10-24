@@ -532,18 +532,18 @@ export class VisualIndicators {
 
     /**
      * Add score overlay to a detected product image
-     * Shows compatibility score (1-10) with visual styling
-     * 9-10: Perfect match badge, normal appearance
-     * 1-8: Greyed out
+     * Shows compatibility score (1-10) or tier (1-3) with visual styling
      * @param {HTMLImageElement} img - Image element
-     * @param {number} score - Compatibility score (1-10)
+     * @param {number} score - Compatibility score (1-10) or tier (1-3)
      * @param {string} reasoning - Analysis reasoning
      * @param {number} index - Image index
+     * @param {string} mode - Ranking mode: 'style' or 'prompt' (optional, will auto-detect if not provided)
      */
-    addScoreOverlay(img, score, reasoning, index) {
+    addScoreOverlay(img, score, reasoning, index, mode = null) {
         console.log(`🏷️ addScoreOverlay called for image ${index + 1}:`, {
             score,
             reasoning,
+            mode,
             imgAlt: img.alt,
             imgSrc: img.src.substring(0, 60) + '...'
         });
@@ -572,9 +572,13 @@ export class VisualIndicators {
             badge.remove();
         });
 
+        // Determine if using tier system (prompt mode) or score system (style mode)
+        const isTierSystem = mode === 'prompt' || (mode === null && score <= 3);
+        console.log('   Using tier system:', isTierSystem, '(mode:', mode, ')');
+
         // Create score badge (for all scores during testing)
         console.log('   Creating score badge...');
-        const scoreBadge = this.createScoreBadge(score, reasoning);
+        const scoreBadge = this.createScoreBadge(score, reasoning, isTierSystem);
         console.log('   Score badge created:', scoreBadge);
 
         // Add tracking attribute to badge
@@ -598,33 +602,64 @@ export class VisualIndicators {
         overlayData.score = score;
         overlayData.reasoning = reasoning;
 
-        // Apply visual styling based on score
-        if (score >= 9) {
-            // Perfect match (9-10): normal appearance with badge
-            console.log(`   ✨ Score ${score}/10 - Perfect match with badge`);
-            overlayData.overlay.dataset.aiScore = score;
-            overlayData.overlay.dataset.aiHighlighted = 'true';
-            img.style.opacity = '1';
-            img.style.filter = 'none';
-        } else if (score >= 7) {
-            // Good match (7-8): normal appearance with score badge
-            console.log(`   ✅ Score ${score}/10 - Good match, normal visibility`);
-            overlayData.overlay.dataset.aiScore = score;
-            overlayData.overlay.dataset.aiHighlighted = 'false';
-            img.style.opacity = '1';
-            img.style.filter = 'none';
-        } else {
-            // Low score (1-6): greyed out
-            console.log(`   ⚫ Score ${score}/10 - Low score, greyed out`);
-            overlayData.overlay.dataset.aiScore = score;
-            overlayData.overlay.dataset.aiHighlighted = 'false';
-            img.style.opacity = '0.3';
-            img.style.filter = 'grayscale(100%)';
-        }
+        // Apply visual styling based on score/tier
+        if (isTierSystem) {
+            // 3-tier system
+            if (score === 3) {
+                // Tier 3 (Yes): normal appearance with badge
+                console.log(`   ✨ Tier 3 (Yes) - Match with badge`);
+                overlayData.overlay.dataset.aiScore = score;
+                overlayData.overlay.dataset.aiHighlighted = 'true';
+                img.style.opacity = '1';
+                img.style.filter = 'none';
+            } else if (score === 2) {
+                // Tier 2 (Maybe): normal appearance with badge
+                console.log(`   ⚪ Tier 2 (Maybe) - Normal visibility`);
+                overlayData.overlay.dataset.aiScore = score;
+                overlayData.overlay.dataset.aiHighlighted = 'false';
+                img.style.opacity = '1';
+                img.style.filter = 'none';
+            } else {
+                // Tier 1 (No): greyed out
+                console.log(`   ⚫ Tier 1 (No) - Greyed out`);
+                overlayData.overlay.dataset.aiScore = score;
+                overlayData.overlay.dataset.aiHighlighted = 'false';
+                img.style.opacity = '0.3';
+                img.style.filter = 'grayscale(100%)';
+            }
 
-        // Update image attributes
-        img.dataset.aiStyleScore = score;
-        img.title = `Score ${score}/10 - ${reasoning}`;
+            // Update image attributes for tier system
+            img.dataset.aiStyleScore = score;
+            img.title = `${score === 3 ? 'Yes' : score === 2 ? 'Maybe' : 'No'} - ${reasoning}`;
+        } else {
+            // 10-point score system
+            if (score >= 9) {
+                // Perfect match (9-10): normal appearance with badge
+                console.log(`   ✨ Score ${score}/10 - Perfect match with badge`);
+                overlayData.overlay.dataset.aiScore = score;
+                overlayData.overlay.dataset.aiHighlighted = 'true';
+                img.style.opacity = '1';
+                img.style.filter = 'none';
+            } else if (score >= 7) {
+                // Good match (7-8): normal appearance with score badge
+                console.log(`   ✅ Score ${score}/10 - Good match, normal visibility`);
+                overlayData.overlay.dataset.aiScore = score;
+                overlayData.overlay.dataset.aiHighlighted = 'false';
+                img.style.opacity = '1';
+                img.style.filter = 'none';
+            } else {
+                // Low score (1-6): greyed out
+                console.log(`   ⚫ Score ${score}/10 - Low score, greyed out`);
+                overlayData.overlay.dataset.aiScore = score;
+                overlayData.overlay.dataset.aiHighlighted = 'false';
+                img.style.opacity = '0.3';
+                img.style.filter = 'grayscale(100%)';
+            }
+
+            // Update image attributes for score system
+            img.dataset.aiStyleScore = score;
+            img.title = `Score ${score}/10 - ${reasoning}`;
+        }
 
         // Set filter state attributes for CSS reactivity
         if (this.filterStateManager) {
@@ -658,117 +693,232 @@ export class VisualIndicators {
 
     /**
      * Create score badge element
-     * Shows score for all products during testing
-     * @param {number} score - Compatibility score (1-10)
+     * Shows score (1-10) or tier (1-3) for products
+     * @param {number} score - Compatibility score (1-10) or tier (1-3)
      * @param {string} reasoning - Analysis reasoning
+     * @param {boolean} isTierSystem - True if using tier system (1-3), false for score system (1-10)
      * @returns {HTMLElement} Score badge element
      */
-    createScoreBadge(score, reasoning) {
+    createScoreBadge(score, reasoning, isTierSystem = false) {
+        console.log('🏷️ createScoreBadge called:', {
+            score,
+            scoreType: typeof score,
+            reasoning: reasoning?.substring(0, 50),
+            isTierSystem
+        });
+
         const badge = document.createElement('div');
         badge.className = 'ai-style-score-badge';
 
-        // Determine color based on score
-        let backgroundColor, textColor, borderColor;
-        if (score >= 9) {
-            // Perfect match: gold
-            backgroundColor = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
-            textColor = '#78350f';
-            borderColor = '#fef3c7';
-            badge.dataset.aiStyleScoreBadge = 'perfect';
+        // Tier labels for 1-3 system
+        const tierLabels = {
+            1: 'No',      // Tier 1 = No match
+            2: 'Maybe',   // Tier 2 = Maybe
+            3: 'Yes'      // Tier 3 = Yes match
+        };
 
-            // Perfect match gets sparkle animation
-            badge.style.cssText = `
-                position: absolute;
-                background: ${backgroundColor};
-                color: ${textColor};
-                font-weight: 800;
-                font-size: 14px;
-                padding: 4px 10px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4), 0 0 15px rgba(251, 191, 36, 0.3);
-                z-index: 9999;
-                pointer-events: auto;
-                cursor: help;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                text-align: center;
-                border: 2px solid ${borderColor};
-                animation: perfectMatchPulse 2s ease-in-out infinite;
-            `;
-            this.ensurePerfectMatchAnimation();
-        } else if (score >= 7) {
-            // Good match: green
-            backgroundColor = '#10b981';
-            textColor = '#ffffff';
-            borderColor = '#059669';
-            badge.dataset.aiStyleScoreBadge = 'good';
+        // Determine color and styling based on score/tier
+        let backgroundColor, textColor, borderColor, badgeText, tooltipText;
 
-            badge.style.cssText = `
-                position: absolute;
-                background: ${backgroundColor};
-                color: ${textColor};
-                font-weight: 700;
-                font-size: 14px;
-                padding: 4px 10px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-                z-index: 9999;
-                pointer-events: auto;
-                cursor: help;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                text-align: center;
-                border: 2px solid ${borderColor};
-            `;
-        } else if (score >= 4) {
-            // Neutral: orange
-            backgroundColor = '#f59e0b';
-            textColor = '#78350f';
-            borderColor = '#d97706';
-            badge.dataset.aiStyleScoreBadge = 'neutral';
+        if (isTierSystem) {
+            // 3-tier system (Yes/Maybe/No)
+            // SAFETY CHECK: Ensure score is valid tier (1-3)
+            if (score < 1 || score > 3) {
+                console.error('❌ Invalid tier score received:', score, '(expected 1-3)');
+                console.error('   This indicates stale cached data. Falling back to tier 2 (Maybe).');
+                score = 2; // Fallback to neutral tier
+            }
 
-            badge.style.cssText = `
-                position: absolute;
-                background: ${backgroundColor};
-                color: ${textColor};
-                font-weight: 700;
-                font-size: 14px;
-                padding: 4px 10px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-                z-index: 9999;
-                pointer-events: auto;
-                cursor: help;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                text-align: center;
-                border: 2px solid ${borderColor};
-            `;
+            badgeText = tierLabels[score] || 'Maybe';
+            console.log('   Tier system: score=', score, '-> badgeText=', badgeText);
+            tooltipText = `${badgeText} - ${reasoning}`;
+
+            if (score === 3) {
+                // Tier 3 (Yes): gold/yellow
+                console.log('   ✅ Creating TIER 3 (YES) badge - Gold color');
+                backgroundColor = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
+                textColor = '#78350f';
+                borderColor = '#fef3c7';
+                badge.dataset.aiStyleScoreBadge = 'yes';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 800;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4), 0 0 15px rgba(251, 191, 36, 0.3);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                    animation: perfectMatchPulse 2s ease-in-out infinite;
+                `;
+                this.ensurePerfectMatchAnimation();
+            } else if (score === 2) {
+                // Tier 2 (Maybe): orange
+                console.log('   ⚠️ Creating TIER 2 (MAYBE) badge - Orange color');
+                backgroundColor = '#f59e0b';
+                textColor = '#78350f';
+                borderColor = '#d97706';
+                badge.dataset.aiStyleScoreBadge = 'maybe';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 700;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                `;
+            } else {
+                // Tier 1 (No): red
+                console.log('   ❌ Creating TIER 1 (NO) badge - Red color');
+                backgroundColor = '#ef4444';
+                textColor = '#ffffff';
+                borderColor = '#dc2626';
+                badge.dataset.aiStyleScoreBadge = 'no';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 700;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                `;
+            }
         } else {
-            // Poor match: red
-            backgroundColor = '#ef4444';
-            textColor = '#ffffff';
-            borderColor = '#dc2626';
-            badge.dataset.aiStyleScoreBadge = 'poor';
+            // 10-point score system
+            badgeText = `${score}`;
+            tooltipText = `Score ${score}/10 - ${reasoning}`;
 
-            badge.style.cssText = `
-                position: absolute;
-                background: ${backgroundColor};
-                color: ${textColor};
-                font-weight: 700;
-                font-size: 14px;
-                padding: 4px 10px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-                z-index: 9999;
-                pointer-events: auto;
-                cursor: help;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                text-align: center;
-                border: 2px solid ${borderColor};
-            `;
+            if (score >= 9) {
+                // Perfect match: gold
+                backgroundColor = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
+                textColor = '#78350f';
+                borderColor = '#fef3c7';
+                badge.dataset.aiStyleScoreBadge = 'perfect';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 800;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4), 0 0 15px rgba(251, 191, 36, 0.3);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                    animation: perfectMatchPulse 2s ease-in-out infinite;
+                `;
+                this.ensurePerfectMatchAnimation();
+            } else if (score >= 7) {
+                // Good match: green
+                backgroundColor = '#10b981';
+                textColor = '#ffffff';
+                borderColor = '#059669';
+                badge.dataset.aiStyleScoreBadge = 'good';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 700;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                `;
+            } else if (score >= 4) {
+                // Neutral: orange
+                backgroundColor = '#f59e0b';
+                textColor = '#78350f';
+                borderColor = '#d97706';
+                badge.dataset.aiStyleScoreBadge = 'neutral';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 700;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                `;
+            } else {
+                // Poor match: red
+                backgroundColor = '#ef4444';
+                textColor = '#ffffff';
+                borderColor = '#dc2626';
+                badge.dataset.aiStyleScoreBadge = 'poor';
+
+                badge.style.cssText = `
+                    position: absolute;
+                    background: ${backgroundColor};
+                    color: ${textColor};
+                    font-weight: 700;
+                    font-size: 14px;
+                    padding: 4px 10px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 9999;
+                    pointer-events: auto;
+                    cursor: help;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    border: 2px solid ${borderColor};
+                `;
+            }
         }
 
-        // Set badge content
-        badge.textContent = `${score}`;
-        badge.title = `Score ${score}/10 - ${reasoning}`;
+        // Set badge content and tooltip
+        badge.textContent = badgeText;
+        badge.title = tooltipText;
+
+        console.log('   📛 Badge created:', {
+            text: badgeText,
+            backgroundColor: badge.style.background || backgroundColor,
+            dataset: badge.dataset.aiStyleScoreBadge
+        });
 
         return badge;
     }
@@ -825,6 +975,40 @@ export class VisualIndicators {
             badge.style.top = `${rect.top + scrollTop + 8}px`;
             badge.style.left = `${rect.right + scrollLeft - 60}px`; // 60px from right edge
         }
+    }
+
+    /**
+     * Replace all score badges with loading indicators
+     * Used when switching modes or applying new prompts
+     */
+    replaceScoresWithLoadingIndicators() {
+        console.log('🔄 Replacing all score badges with loading indicators...');
+
+        let replacedCount = 0;
+
+        // Iterate through all tracked overlays
+        this.overlayMap.forEach((overlayData, img) => {
+            // Remove existing score badge if any
+            if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
+                overlayData.scoreBadge.remove();
+                overlayData.scoreBadge = null;
+                replacedCount++;
+            }
+
+            // Add loading indicator
+            const loadingBadge = this.createLoadingBadge();
+            this.positionScoreBadge(loadingBadge, img);
+            document.body.appendChild(loadingBadge);
+
+            // Update tracking
+            overlayData.scoreBadge = loadingBadge;
+
+            // Reset image opacity/filter
+            img.style.opacity = '1';
+            img.style.filter = 'none';
+        });
+
+        console.log(`✅ Replaced ${replacedCount} score badges with loading indicators`);
     }
 
     /**
@@ -1223,6 +1407,28 @@ export class VisualIndicators {
             console.error('Failed to fetch and convert image:', error);
             throw new Error(`Failed to convert image: ${error.message}`);
         }
+    }
+
+    /**
+     * Clear all visual indicators from the page
+     * Used when disabling the extension
+     */
+    clearAllIndicators() {
+        console.log('🧹 Clearing all visual indicators...');
+        
+        // Get all tracked images
+        const images = Array.from(this.overlayMap.keys());
+        
+        // Remove indicators for each image
+        images.forEach(img => {
+            this.removeImageIndicator(img);
+        });
+        
+        // Clear the map
+        this.overlayMap.clear();
+        this.updateHandlers.clear();
+        
+        console.log(`✅ Cleared ${images.length} visual indicators`);
     }
 
 }

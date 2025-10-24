@@ -116,60 +116,90 @@ body {
     margin-bottom: 0;
 }
 
-/* Toggle Switch Styles */
-.toggle-label {
+/* Mode Selector (3-way segmented control) */
+.mode-selector {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.mode-option {
+    flex: 1;
     cursor: pointer;
-    user-select: none;
-    font-size: 14px;
-    font-weight: 500;
 }
 
-.toggle-container {
-    position: relative;
-    width: 48px;
-    height: 26px;
-}
-
-.toggle-input {
+.mode-option input[type="radio"] {
     position: absolute;
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.toggle-switch {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 13px;
-    transition: background 0.3s;
+.mode-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    min-height: 70px;
 }
 
-.toggle-switch::before {
-    content: '';
-    position: absolute;
-    height: 20px;
-    width: 20px;
-    left: 3px;
-    bottom: 3px;
-    background: white;
-    border-radius: 50%;
-    transition: transform 0.3s;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+.mode-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    display: block;
 }
 
-.toggle-input:checked + .toggle-switch {
-    background: #10b981;
+.mode-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
 }
 
-.toggle-input:checked + .toggle-switch::before {
-    transform: translateX(22px);
+.mode-option:hover .mode-card {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
+}
+
+/* Selected state */
+.mode-option input[type="radio"]:checked + .mode-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mode-option input[type="radio"]:checked + .mode-card .mode-label {
+    color: #667eea;
+}
+
+/* Specific mode colors when selected */
+.mode-option input[type="radio"]#modeOff:checked + .mode-card {
+    background: rgba(107, 114, 128, 0.9);
+}
+
+.mode-option input[type="radio"]#modeOff:checked + .mode-card .mode-label {
+    color: white;
+}
+
+.mode-option input[type="radio"]#modeStyle:checked + .mode-card {
+    background: rgba(16, 185, 129, 0.9);
+}
+
+.mode-option input[type="radio"]#modeStyle:checked + .mode-card .mode-label {
+    color: white;
+}
+
+.mode-option input[type="radio"]#modePrompt:checked + .mode-card {
+    background: rgba(59, 130, 246, 0.9);
+}
+
+.mode-option input[type="radio"]#modePrompt:checked + .mode-card .mode-label {
+    color: white;
 }
 
 /* Slider Styles */
@@ -245,35 +275,9 @@ body {
     padding: 0 4px;
 }
 
-/* Divider */
-.divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    margin: 15px 0;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.divider::before,
-.divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.divider span {
-    padding: 0 10px;
-}
-
-/* Prompt input */
-.prompt-label {
-    font-weight: 600;
-    color: white;
-    font-size: 13px;
-    margin-bottom: 8px;
-    display: block;
+/* Prompt Section (shown only in prompt mode) */
+.prompt-section {
+    margin-bottom: 12px;
 }
 
 .prompt-input-container {
@@ -328,25 +332,6 @@ body {
     cursor: not-allowed;
 }
 
-.clear-prompt-btn {
-    width: 100%;
-    padding: 8px 14px;
-    background: rgba(239, 68, 68, 0.8);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-
-.clear-prompt-btn:hover {
-    background: rgba(239, 68, 68, 1);
-    transform: translateY(-1px);
-}
-
 /* Recent prompts */
 .recent-prompts {
     margin-top: 8px;
@@ -388,27 +373,20 @@ body {
     transform: translateY(-1px);
 }
 
-/* Active mode indicator */
-.active-mode-indicator {
-    margin: 12px 0 8px 0;
-    padding: 8px 12px;
-    background: rgba(16, 185, 129, 0.8);
-    color: white;
-    border-radius: 6px;
+/* Mode Status Display */
+.mode-status {
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
     text-align: center;
     font-size: 12px;
-    font-weight: 600;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-.active-mode-indicator.prompt-mode {
-    background: rgba(59, 130, 246, 0.8);
-}
-
-.active-mode-indicator.style-mode {
-    background: rgba(16, 185, 129, 0.8);
-}
-
-.active-mode-indicator.all-mode {
-    background: rgba(107, 114, 128, 0.8);
+.mode-status.active {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
 }

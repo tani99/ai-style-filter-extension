@@ -20,7 +20,7 @@ This document provides a detailed step-by-step implementation plan for adding us
 ### Current Workflow
 1. User uploads photos → AI generates style profile
 2. Content script detects products on e-commerce sites
-3. ProductAnalyzer scores each product (1-3 tier) based on style profile
+3. ProductAnalyzer scores each product (1-10 tier) based on style profile
 4. VisualIndicators displays:
    - Tier 1 (bad): Greyed out
    - Tier 2 (fine): Normal appearance
@@ -41,7 +41,7 @@ This document provides a detailed step-by-step implementation plan for adding us
    - Toggle "My Style Mode" (existing)
    - Enter text prompt in new "Search Mode" (new)
 3. Products are ranked using the selected method
-4. Visual indicators show the same tier system (1-3)
+4. Visual indicators show the same tier system
 5. User can switch between modes at any time
 
 ---

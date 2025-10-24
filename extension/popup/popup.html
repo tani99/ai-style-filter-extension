@@ -22,30 +22,36 @@
             <!-- Filter Controls Section -->
             <div class="filter-section">
                 <div class="filter-header">
-                    <h3>🎨 Style Filter</h3>
+                    <h3>🎨 Filter Mode</h3>
                 </div>
 
-                <!-- My Style Mode Toggle -->
-                <div class="filter-control">
-                    <label class="toggle-label">
-                        <span>My Style Mode</span>
-                        <div class="toggle-container">
-                            <input type="checkbox" id="myStyleToggle" class="toggle-input">
-                            <div class="toggle-switch"></div>
+                <!-- Mode Selector (3-way toggle) -->
+                <div class="mode-selector">
+                    <label class="mode-option">
+                        <input type="radio" name="filterMode" value="off" id="modeOff">
+                        <div class="mode-card">
+                            <span class="mode-icon">⏸️</span>
+                            <span class="mode-label">Off</span>
+                        </div>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="filterMode" value="style" id="modeStyle">
+                        <div class="mode-card">
+                            <span class="mode-icon">✨</span>
+                            <span class="mode-label">My Style</span>
+                        </div>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="filterMode" value="prompt" id="modePrompt">
+                        <div class="mode-card">
+                            <span class="mode-icon">🔍</span>
+                            <span class="mode-label">Search</span>
                         </div>
                     </label>
                 </div>
 
-                <!-- Divider -->
-                <div class="divider">
-                    <span>OR</span>
-                </div>
-
-                <!-- Prompt Search Mode -->
-                <div class="filter-control">
-                    <label class="prompt-label">
-                        <span>🔍 Search for Specific Item</span>
-                    </label>
+                <!-- Prompt Input (shown only in prompt mode) -->
+                <div id="promptSection" class="prompt-section" style="display: none;">
                     <div class="prompt-input-container">
                         <input
                             type="text"
@@ -58,9 +64,6 @@
                             Apply
                         </button>
                     </div>
-                    <button id="clearPromptBtn" class="clear-prompt-btn" style="display: none;">
-                        Clear Search
-                    </button>
 
                     <!-- Recent prompts quick access -->
                     <div id="recentPrompts" class="recent-prompts" style="display: none;">
@@ -71,13 +74,13 @@
                     </div>
                 </div>
 
-                <!-- Active mode indicator -->
-                <div id="activeModeIndicator" class="active-mode-indicator">
-                    <span id="activeModeText">Mode: All Items</span>
+                <!-- Active mode status -->
+                <div id="modeStatus" class="mode-status">
+                    <span id="modeStatusText">Extension is off</span>
                 </div>
 
-                <!-- Match Sensitivity Slider -->
-                <div class="filter-control">
+                <!-- Match Sensitivity Slider (shown only when active) -->
+                <div id="sensitivitySection" class="filter-control" style="display: none;">
                     <div class="slider-label">
                         <span>Match Sensitivity</span>
                         <span id="sensitivityValue" class="value-display">6/10</span>
