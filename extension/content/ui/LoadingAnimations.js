@@ -222,9 +222,9 @@ export class LoadingAnimations {
     }
 
     /**
-     * Show temporary success message
+     * Show success message
      * @param {string} message - Success message
-     * @param {number} duration - Duration to show message in milliseconds
+     * @param {number|null} duration - Duration to show message in milliseconds, or null for permanent
      */
     showSuccessMessage(message, duration = 2000) {
         this.hideLoadingAnimation();
@@ -277,19 +277,22 @@ export class LoadingAnimations {
         successOverlay.appendChild(messageElement);
         document.body.appendChild(successOverlay);
 
-        // Auto-remove after duration
-        setTimeout(() => {
-            if (successOverlay.parentNode) {
-                successOverlay.style.animation = 'slideInFade 0.3s ease-out reverse';
-                setTimeout(() => {
-                    if (successOverlay.parentNode) {
-                        successOverlay.remove();
-                    }
-                }, 300);
-            }
-        }, duration);
-
-        console.log('✅ Success message shown:', message);
+        // Auto-remove after duration (only if duration is not null)
+        if (duration !== null) {
+            setTimeout(() => {
+                if (successOverlay.parentNode) {
+                    successOverlay.style.animation = 'slideInFade 0.3s ease-out reverse';
+                    setTimeout(() => {
+                        if (successOverlay.parentNode) {
+                            successOverlay.remove();
+                        }
+                    }, 300);
+                }
+            }, duration);
+            console.log('✅ Success message shown (temporary):', message);
+        } else {
+            console.log('✅ Success message shown (permanent):', message);
+        }
     }
 
     /**

@@ -154,10 +154,11 @@ export class ContentScriptManager {
      * @private
      */
     async runInitialDetection() {
-        // Wait for page to settle and images to load
+        // Start immediately - images will be detected as they load
+        // Reduced delay from 1000ms to 300ms for faster startup
         setTimeout(async () => {
             await this.detectProductImages();
-        }, 1000);
+        }, 300);
     }
 
     /**
@@ -364,15 +365,13 @@ export class ContentScriptManager {
                     `Found ${results.detectedImages.length} clothing items`
                 );
 
-                // Generate outfit descriptions for virtual try-on (runs in background)
-                this.generateOutfitDescriptions(results.detectedImages);
-
-                // Always analyze products in the background (regardless of display mode)
-                // This ensures data is ready when user toggles display modes
+                // Process each image completely (description + style score) before moving to next
                 if (this.styleProfile) {
-                    // Start analyzing all products using batched analysis
-                    await this.analyzeInBackground();
+                    // Combined analysis: description and style score for each image
+                    await this.analyzeCombined(results.detectedImages);
                 } else {
+                    // No style profile: just generate descriptions
+                    this.generateOutfitDescriptions(results.detectedImages);
                     console.log('ℹ️ No style profile available - skipping product analysis');
                 }
             }
@@ -454,7 +453,7 @@ export class ContentScriptManager {
                 productImages,
                 { styleProfile: this.styleProfile },
                 {
-                    batchSize: 3,
+                    batchSize: 10,
                     delayBetweenBatches: 500,
                     onProgress: (progress) => {
                         console.log(`   📊 New products background analysis: ${progress.completed}/${progress.total}`);
@@ -494,7 +493,7 @@ export class ContentScriptManager {
                 const promptResults = await this.productSearchMatcher.analyzeBatch(
                     productImages,
                     { userPrompt: this.userPrompt },
-                    { batchSize: 3, delayBetweenBatches: 500 }
+                    { batchSize: 10, delayBetweenBatches: 500 }
                 );
 
                 promptResults.forEach((result, localIndex) => {
@@ -575,8 +574,105 @@ export class ContentScriptManager {
     }
 
     /**
+     * Combined analysis: Generate both description AND style score for each image
+     * Process sequentially to show incremental progress in the UI
+     * @param {Array<Object>} detectedImages - Array of detected product objects
+     * @returns {Promise<void>}
+     * @private
+     */
+    async analyzeCombined(detectedImages) {
+        console.log('🔍 Starting combined analysis for', detectedImages.length, 'products...');
+
+        if (detectedImages.length === 0) {
+            return;
+        }
+
+        const productImages = detectedImages.map(product => product.element);
+
+        // Show global progress indicator
+        this.globalProgressIndicator.show(detectedImages.length, 'Analyzing products');
+
+        try {
+            await this.personalStyleMatcher.initialize();
+
+            // Track completion count for progress updates
+            let completedCount = 0;
+
+            // Process ALL images concurrently - start all requests at once
+            const analysisPromises = detectedImages.map(async (product, i) => {
+                const img = product.element;
+
+                try {
+                    // Step 1 & 2: Generate both description and style score concurrently
+                    const [description, styleResult] = await Promise.all([
+                        this.personalStyleMatcher.generateOutfitDescription(img),
+                        this.personalStyleMatcher.analyzeProduct(img, this.styleProfile)
+                    ]);
+
+                    // Store results
+                    if (description) {
+                        img.dataset.aiOutfitDescription = description;
+                    }
+
+                    if (styleResult) {
+                        this.productAnalysisResults.set(img, styleResult);
+                    }
+
+                    // Update progress (atomic increment)
+                    completedCount++;
+                    this.globalProgressIndicator.updateProgress(completedCount);
+
+                    console.log(`✅ [${completedCount}/${detectedImages.length}] Completed analysis (score: ${styleResult?.score})`);
+
+                    return { success: true, index: i };
+
+                } catch (error) {
+                    console.error(`❌ Error analyzing product ${i + 1}:`, error);
+                    completedCount++;
+                    this.globalProgressIndicator.updateProgress(completedCount);
+                    return { success: false, index: i, error };
+                }
+            });
+
+            // Wait for all analyses to complete
+            console.log(`🚀 Started ${analysisPromises.length} concurrent analysis requests...`);
+            await Promise.all(analysisPromises);
+
+            console.log(`✅ Combined analysis complete for ${detectedImages.length} products`);
+
+            // Show UI based on current ranking mode
+            if (this.currentRankingMode === 'style') {
+                // Create array of [product, result] pairs for safe updating
+                const productResultPairs = detectedImages.map((product, i) => ({
+                    product,
+                    result: this.productAnalysisResults.get(product.element),
+                    index: i
+                })).filter(pair => pair.result); // Only include products that have results
+
+                this.updateProductScoresWithPairs(productResultPairs);
+            }
+
+            // Hide progress indicator
+            this.globalProgressIndicator.hide();
+
+            // Show permanent success message
+            const avgScore = this.calculateAverageScore(
+                productImages.map(img => this.productAnalysisResults.get(img))
+            );
+            this.loadingAnimations.showSuccessMessage(
+                `Analysis complete! Average compatibility: ${avgScore.toFixed(1)}/10`,
+                null
+            );
+
+        } catch (error) {
+            console.error('❌ Combined analysis failed:', error);
+            this.globalProgressIndicator.hide();
+        }
+    }
+
+    /**
      * Generate outfit descriptions for detected products (for virtual try-on)
-     * Runs in background without blocking UI
+     * Used when style profile is not available
      * @param {Array<Object>} detectedImages - Array of detected product objects
      * @private
      */
@@ -592,7 +688,7 @@ export class ContentScriptManager {
             await this.personalStyleMatcher.initialize();
 
             // Generate descriptions in small batches to avoid overwhelming the AI
-            const batchSize = 3;
+            const batchSize = 10;
             let completedCount = 0;
 
             for (let i = 0; i < detectedImages.length; i += batchSize) {
@@ -661,7 +757,7 @@ export class ContentScriptManager {
                 productImages,
                 { styleProfile: this.styleProfile },
                 {
-                    batchSize: 3,
+                    batchSize: 10,
                     delayBetweenBatches: 500,
                     onProgress: (progress) => {
                         console.log(`   📊 Background analysis: ${progress.completed}/${progress.total}`);
@@ -768,7 +864,7 @@ export class ContentScriptManager {
                 productImages,
                 analysisParam,
                 {
-                    batchSize: 3,
+                    batchSize: 10,
                     delayBetweenBatches: 500,
                     onProgress: (progress) => {
                         console.log(`📊 Analysis progress: ${progress.completed}/${progress.total} (${progress.percentage}%)`);
@@ -844,13 +940,13 @@ export class ContentScriptManager {
             // Hide loading animation
             this.loadingAnimations.hideLoadingAnimation();
 
-            // Show completion message
+            // Show completion message (permanent)
             const avgScore = this.calculateAverageScore(normalizedResults);
             const completionMessage = this.currentRankingMode === 'prompt'
                 ? `Found matches for "${this.userPrompt}"!`
                 : `Analysis complete! Average compatibility: ${avgScore.toFixed(1)}/10`;
 
-            this.loadingAnimations.showSuccessMessage(completionMessage);
+            this.loadingAnimations.showSuccessMessage(completionMessage, null);
 
             // Count score sources
             const aiScores = normalizedResults.filter(r => r.method === 'ai_analysis' || r.method === 'prompt_analysis').length;
@@ -884,6 +980,73 @@ export class ContentScriptManager {
     }
 
     /**
+     * Update visual indicators with product scores (safer version with pairs)
+     * @param {Array<Object>} productResultPairs - Array of {product, result, index} objects
+     * @private
+     */
+    updateProductScoresWithPairs(productResultPairs) {
+        console.log('🎨 updateProductScoresWithPairs called with', productResultPairs.length, 'pairs');
+
+        productResultPairs.forEach(({product, result, index}) => {
+            console.log(`   Product ${index + 1}:`, {
+                hasProduct: !!product,
+                hasElement: !!product?.element,
+                isConnected: !!product?.element?.isConnected,
+                score: result?.score,
+                reasoning: result?.reasoning
+            });
+
+            if (!result) {
+                console.warn(`   ⚠️ No result for product at index ${index}`);
+                return;
+            }
+
+            if (!product || !product.element) {
+                console.warn(`   ⚠️ Cannot add score overlay - missing product or element at index ${index}`);
+                return;
+            }
+
+            // SAFETY CHECK: Verify element is still in DOM before adding overlay
+            if (!product.element.isConnected) {
+                console.warn(`   ⚠️ Product ${index + 1} element is no longer in DOM - skipping score overlay`);
+                return;
+            }
+
+            // Only show badge if analysis was successful (not a fallback)
+            const isFallback = result.success === false ||
+                              (result.method && result.method.includes('fallback'));
+
+            if (isFallback) {
+                console.log(`   ⚠️ Product ${index + 1} returned fallback result - keeping loading indicator`);
+                // Keep the loading indicator, don't replace it with a fallback badge
+            } else {
+                console.log(`   ✏️ Calling addScoreOverlay for product ${index + 1}:`, {
+                    score: result.score,
+                    scoreType: typeof result.score,
+                    reasoning: result.reasoning?.substring(0, 50),
+                    mode: this.currentRankingMode,
+                    tier: result.tier,
+                    imgAlt: product.element.alt
+                });
+                // Add score overlay to product
+                try {
+                    this.visualIndicators.addScoreOverlay(
+                        product.element,
+                        result.score,
+                        result.reasoning,
+                        index,
+                        this.currentRankingMode
+                    );
+                } catch (error) {
+                    console.error(`   ❌ Failed to add score overlay for product ${index + 1}:`, error);
+                }
+            }
+        });
+
+        console.log('✅ Product score overlays added');
+    }
+
+    /**
      * Update visual indicators with product scores
      * @param {Array<Object>} analysisResults - Analysis results
      * @private
@@ -896,38 +1059,44 @@ export class ContentScriptManager {
             console.log(`   Product ${index + 1}:`, {
                 hasProduct: !!product,
                 hasElement: !!product?.element,
-                score: result.score,
-                reasoning: result.reasoning
+                score: result?.score,
+                reasoning: result?.reasoning
             });
 
-            if (product && product.element) {
-                // Only show badge if analysis was successful (not a fallback)
-                const isFallback = result.success === false ||
-                                  (result.method && result.method.includes('fallback'));
+            if (!result) {
+                console.warn(`   ⚠️ No result for product at index ${index}`);
+                return;
+            }
 
-                if (isFallback) {
-                    console.log(`   ⚠️ Product ${index + 1} returned fallback result - keeping loading indicator`);
-                    // Keep the loading indicator, don't replace it with a fallback badge
-                } else {
-                    console.log(`   ✏️ Calling addScoreOverlay for product ${index + 1}:`, {
-                        score: result.score,
-                        scoreType: typeof result.score,
-                        reasoning: result.reasoning?.substring(0, 50),
-                        mode: this.currentRankingMode,
-                        tier: result.tier,
-                        imgAlt: product.element.alt
-                    });
-                    // Add score overlay to product
-                    this.visualIndicators.addScoreOverlay(
-                        product.element,
-                        result.score,
-                        result.reasoning,
-                        index,
-                        this.currentRankingMode
-                    );
-                }
-            } else {
+            if (!product || !product.element) {
                 console.warn(`   ⚠️ Cannot add score overlay - missing product or element at index ${index}`);
+                return;
+            }
+
+            // Only show badge if analysis was successful (not a fallback)
+            const isFallback = result.success === false ||
+                              (result.method && result.method.includes('fallback'));
+
+            if (isFallback) {
+                console.log(`   ⚠️ Product ${index + 1} returned fallback result - keeping loading indicator`);
+                // Keep the loading indicator, don't replace it with a fallback badge
+            } else {
+                console.log(`   ✏️ Calling addScoreOverlay for product ${index + 1}:`, {
+                    score: result.score,
+                    scoreType: typeof result.score,
+                    reasoning: result.reasoning?.substring(0, 50),
+                    mode: this.currentRankingMode,
+                    tier: result.tier,
+                    imgAlt: product.element?.alt
+                });
+                // Add score overlay to product
+                this.visualIndicators.addScoreOverlay(
+                    product.element,
+                    result.score,
+                    result.reasoning,
+                    index,
+                    this.currentRankingMode
+                );
             }
         });
 
