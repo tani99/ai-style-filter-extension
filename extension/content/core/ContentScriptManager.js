@@ -169,9 +169,11 @@ export class ContentScriptManager {
             this.handleNavigationChange();
         });
 
-        this.eventListeners.setupLazyLoadingDetection(() => {
-            this.handleNewImagesDetected();
-        });
+        // DISABLED: Lazy loading detection causes issues with image hover swaps
+        // Only detect initial images on page load, not dynamic changes
+        // this.eventListeners.setupLazyLoadingDetection(() => {
+        //     this.handleNewImagesDetected();
+        // });
 
         // EventListeners handles message setup directly
         this.eventListeners.setupMessageListeners();
