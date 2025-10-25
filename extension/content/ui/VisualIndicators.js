@@ -795,12 +795,14 @@ export class VisualIndicators {
         } else {
             // 10-point score system
             if (score >= 9) {
-                // Perfect match (9-10): normal appearance with badge
-                console.log(`   ✨ Score ${score}/10 - Perfect match with badge`);
+                // Perfect match (9-10): special yellow border styling
+                console.log(`   ✨ Score ${score}/10 - Perfect match with special yellow border`);
                 overlayData.overlay.dataset.aiScore = score;
                 overlayData.overlay.dataset.aiHighlighted = 'true';
                 img.style.opacity = '1';
                 img.style.filter = 'none';
+                img.style.border = '3px solid #fbbf24';
+                img.style.boxShadow = '0 0 15px rgba(251, 191, 36, 0.6)';
             } else if (score >= 7) {
                 // Good match (7-8): normal appearance with score badge
                 console.log(`   ✅ Score ${score}/10 - Good match, normal visibility`);
@@ -809,12 +811,11 @@ export class VisualIndicators {
                 img.style.opacity = '1';
                 img.style.filter = 'none';
             } else {
-                // Low score (1-6): greyed out
-                console.log(`   ⚫ Score ${score}/10 - Low score, greyed out`);
+                // Low score (1-6): completely hidden
+                console.log(`   ⚫ Score ${score}/10 - Low score, hidden`);
                 overlayData.overlay.dataset.aiScore = score;
                 overlayData.overlay.dataset.aiHighlighted = 'false';
-                img.style.opacity = '0.3';
-                img.style.filter = 'grayscale(100%)';
+                img.style.display = 'none';
             }
 
             // Update image attributes for score system
@@ -1022,12 +1023,12 @@ export class VisualIndicators {
                     text-align: center;
                     border: 2px solid ${borderColor};
                 `;
-            } else if (score >= 4) {
-                // Neutral: orange
-                backgroundColor = '#f59e0b';
-                textColor = '#78350f';
-                borderColor = '#d97706';
-                badge.dataset.aiStyleScoreBadge = 'neutral';
+            } else if (score >= 7) {
+                // Good match (7-8): green
+                backgroundColor = '#10b981';
+                textColor = '#ffffff';
+                borderColor = '#059669';
+                badge.dataset.aiStyleScoreBadge = 'good';
 
                 badge.style.cssText = `
                     position: absolute;
@@ -1046,28 +1047,8 @@ export class VisualIndicators {
                     border: 2px solid ${borderColor};
                 `;
             } else {
-                // Poor match: red
-                backgroundColor = '#ef4444';
-                textColor = '#ffffff';
-                borderColor = '#dc2626';
-                badge.dataset.aiStyleScoreBadge = 'poor';
-
-                badge.style.cssText = `
-                    position: absolute;
-                    background: ${backgroundColor};
-                    color: ${textColor};
-                    font-weight: 700;
-                    font-size: 14px;
-                    padding: 4px 10px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-                    z-index: 9999;
-                    pointer-events: auto;
-                    cursor: help;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    text-align: center;
-                    border: 2px solid ${borderColor};
-                `;
+                // Low score (1-6): hidden - no badge needed
+                return null;
             }
         }
 

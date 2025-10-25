@@ -5,7 +5,7 @@
 
 export const FILTER_DEFAULTS = {
     mode: 'myStyle',        // 'all' or 'myStyle' - DEFAULT: myStyle ON
-    scoreThreshold: 8,      // Minimum score to show (1-10) - DEFAULT: 8
+    scoreThreshold: 7,      // Minimum score to show (1-10) - FIXED: 7 (automatic UI editing)
     selectedCategories: []  // Filter by specific style categories
 };
 

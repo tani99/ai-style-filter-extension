@@ -36,8 +36,6 @@ function setupEventListeners() {
     const uploadArea = document.getElementById('uploadArea');
     const photoInput = document.getElementById('photoInput');
     const analyzeBtn = document.getElementById('analyzeBtn');
-    const sensitivitySlider = document.getElementById('sensitivitySlider');
-    const sensitivityValue = document.getElementById('sensitivityValue');
     
     // Upload area click
     uploadArea.addEventListener('click', () => {
@@ -112,11 +110,6 @@ function setupEventListeners() {
         }
     });
     
-    // Sensitivity slider
-    sensitivitySlider.addEventListener('input', (e) => {
-        sensitivityValue.textContent = e.target.value;
-        saveSetting('sensitivity', e.target.value);
-    });
 
     // Gemini API setup
     const saveAPIKeyBtn = document.getElementById('saveAPIKeyBtn');

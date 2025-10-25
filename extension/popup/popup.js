@@ -17,9 +17,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // const recentPromptsList = document.getElementById('recentPromptsList');
     
     // Sensitivity slider elements
-    const sensitivitySection = document.getElementById('sensitivitySection');
-    const sensitivitySlider = document.getElementById('sensitivitySlider');
-    const sensitivityValue = document.getElementById('sensitivityValue');
 
     // Handle opening the style dashboard
     openDashboardBtn.addEventListener('click', function() {
@@ -54,19 +51,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     */
 
-    // Handle sensitivity slider changes
-    sensitivitySlider.addEventListener('input', function() {
-        sensitivityValue.textContent = `${sensitivitySlider.value}/10`;
-    });
-
-    sensitivitySlider.addEventListener('change', function() {
-        const filterState = {
-            mode: 'myStyle', // Always myStyle when sensitivity is being used
-            scoreThreshold: parseInt(sensitivitySlider.value)
-        };
-        saveFilterState(filterState);
-        sendFilterStateToContentScript(filterState);
-    });
 
     // Prompt input handlers - DISABLED (search mode disabled)
     /*
@@ -163,10 +147,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
 
-                // Update filter state
+                // Update filter state with fixed threshold
                 const filterState = {
                     mode: 'myStyle',
-                    scoreThreshold: parseInt(sensitivitySlider.value)
+                    scoreThreshold: 7  // Fixed threshold for automatic UI editing
                 };
                 saveFilterState(filterState);
                 sendFilterStateToContentScript(filterState);
@@ -244,10 +228,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateModeStatus('off');
             }
 
-            // Load sensitivity slider
+            // Load filter state (sensitivity slider removed)
             if (result.filterState) {
-                sensitivitySlider.value = result.filterState.scoreThreshold || 6;
-                sensitivityValue.textContent = `${sensitivitySlider.value}/10`;
+                // Filter state is now fixed at threshold 7
+                console.log('Filter state loaded:', result.filterState);
             }
 
             // Recent prompts disabled
@@ -267,12 +251,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show/hide sections based on mode
         if (mode === 'off') {
             // promptSection.style.display = 'none'; // disabled
-            sensitivitySection.style.display = 'none';
             modeStatus.classList.remove('active');
             modeStatusText.textContent = '⏸️ Extension is off';
         } else if (mode === 'style') {
             // promptSection.style.display = 'none'; // disabled
-            sensitivitySection.style.display = 'block';
             modeStatus.classList.add('active');
             modeStatusText.textContent = '✨ Filtering by your style profile';
         }
@@ -280,7 +262,6 @@ document.addEventListener('DOMContentLoaded', function() {
         /*
         } else if (mode === 'prompt') {
             promptSection.style.display = 'block';
-            sensitivitySection.style.display = 'none';
             modeStatus.classList.add('active');
             if (prompt) {
                 const truncated = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
