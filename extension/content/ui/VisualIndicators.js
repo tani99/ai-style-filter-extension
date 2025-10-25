@@ -219,14 +219,14 @@ export class VisualIndicators {
                 this.hideTryonResult(tryonResult);
                 tryonResult = null;
 
-                // Revert icon back to eye
-                eyeIcon.innerHTML = '👁️';
-                eyeIcon.style.background = 'rgba(16, 185, 129, 0.9)';
+                // Revert icon back to cached or default state based on cache availability
+                const hasCachedData = eyeIcon.dataset.tryonCached === 'true';
+                this.updateEyeIconState(eyeIcon, hasCachedData ? 'cached' : 'default');
                 return;
             }
 
             // Generate or retrieve cached try-on
-            tryonResult = await this.handleVirtualTryOn(img, index);
+            tryonResult = await this.handleVirtualTryOn(img, index, eyeIcon);
 
             // Change icon to close (×) when try-on is visible
             if (tryonResult) {
@@ -240,9 +240,9 @@ export class VisualIndicators {
                         this.hideTryonResult(tryonResult);
                         tryonResult = null;
 
-                        // Revert icon back to eye
-                        eyeIcon.innerHTML = '👁️';
-                        eyeIcon.style.background = 'rgba(16, 185, 129, 0.9)';
+                        // Revert icon back to cached or default state based on cache availability
+                        const hasCachedData = eyeIcon.dataset.tryonCached === 'true';
+                        this.updateEyeIconState(eyeIcon, hasCachedData ? 'cached' : 'default');
                     }
                 }, 5000);
 
@@ -253,13 +253,27 @@ export class VisualIndicators {
     }
 
     /**
-     * Handle virtual try-on generation (on demand, no caching)
+     * Handle virtual try-on generation with DOM-based caching
      * @param {HTMLImageElement} img - Product image element
      * @param {number} index - Image index
+     * @param {HTMLElement} eyeIcon - Eye icon element for caching
      * @returns {Promise<HTMLElement>} Try-on result element
      */
-    async handleVirtualTryOn(img, index) {
-        console.log(`🎨 Generating virtual try-on for image ${index + 1}`);
+    async handleVirtualTryOn(img, index, eyeIcon) {
+        console.log(`🎨 Handling virtual try-on for image ${index + 1}`);
+
+        // Check for cached try-on data in DOM
+        const cachedData = this.getCachedTryonData(eyeIcon);
+
+        if (cachedData) {
+            console.log('📦 Using cached try-on data');
+            // Create and display result overlay from cache
+            const resultOverlay = this.createTryonResultOverlay(img, cachedData.imageUrl, img.src, true);
+            document.body.appendChild(resultOverlay);
+            return resultOverlay;
+        }
+
+        console.log('🔄 No valid cache found, generating new try-on');
 
         // Create loading overlay
         const loadingOverlay = this.createTryonLoadingOverlay(img);
@@ -291,8 +305,11 @@ export class VisualIndicators {
             console.log('Try-on response:', response);
 
             if (response.success && response.imageUrl) {
+                // Cache the result in DOM
+                this.cacheTryonData(eyeIcon, response.imageUrl, response.imageBase64);
+
                 // Create and display result overlay
-                const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, img.src);
+                const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, img.src, false);
                 document.body.appendChild(resultOverlay);
 
                 // Remove loading overlay
@@ -314,6 +331,113 @@ export class VisualIndicators {
             loadingOverlay.remove();
 
             return errorOverlay;
+        }
+    }
+
+    /**
+     * Get cached try-on data from eye icon DOM attributes
+     * @param {HTMLElement} eyeIcon - Eye icon element
+     * @returns {Object|null} Cached data object or null if no valid cache
+     */
+    getCachedTryonData(eyeIcon) {
+        const cached = eyeIcon.dataset.tryonCached;
+        const timestamp = eyeIcon.dataset.tryonTimestamp;
+        const imageUrl = eyeIcon.dataset.tryonImageUrl;
+        const imageData = eyeIcon.dataset.tryonImageData;
+
+        // Check if cache exists
+        if (cached !== 'true' || !timestamp || !imageUrl) {
+            return null;
+        }
+
+        // Check cache expiration (24 hours)
+        const now = Date.now();
+        const cacheAge = now - parseInt(timestamp);
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+        if (cacheAge >= maxAge) {
+            console.log('⏰ Cache expired, clearing...');
+            this.clearCachedTryonData(eyeIcon);
+            return null;
+        }
+
+        console.log(`📦 Valid cache found (age: ${Math.round(cacheAge / 1000 / 60)} minutes)`);
+        return {
+            imageUrl,
+            imageData,
+            timestamp: parseInt(timestamp)
+        };
+    }
+
+    /**
+     * Cache try-on data in eye icon DOM attributes
+     * @param {HTMLElement} eyeIcon - Eye icon element
+     * @param {string} imageUrl - Generated try-on image data URL
+     * @param {string} imageData - Base64 image data
+     */
+    cacheTryonData(eyeIcon, imageUrl, imageData) {
+        eyeIcon.dataset.tryonCached = 'true';
+        eyeIcon.dataset.tryonImageUrl = imageUrl;
+        eyeIcon.dataset.tryonImageData = imageData || '';
+        eyeIcon.dataset.tryonTimestamp = Date.now().toString();
+
+        console.log('💾 Try-on data cached in DOM');
+
+        // Update icon visual state to show it's cached
+        this.updateEyeIconState(eyeIcon, 'cached');
+    }
+
+    /**
+     * Clear cached try-on data from eye icon
+     * @param {HTMLElement} eyeIcon - Eye icon element
+     */
+    clearCachedTryonData(eyeIcon) {
+        delete eyeIcon.dataset.tryonCached;
+        delete eyeIcon.dataset.tryonImageUrl;
+        delete eyeIcon.dataset.tryonImageData;
+        delete eyeIcon.dataset.tryonTimestamp;
+
+        // Revert icon to default state
+        this.updateEyeIconState(eyeIcon, 'default');
+    }
+
+    /**
+     * Update eye icon visual state based on cache status
+     * @param {HTMLElement} eyeIcon - Eye icon element
+     * @param {string} state - State: 'default', 'cached', 'loading', 'error'
+     */
+    updateEyeIconState(eyeIcon, state) {
+        switch (state) {
+            case 'cached':
+                // Cached state: add sparkle/shimmer effect
+                eyeIcon.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                eyeIcon.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.5), 0 0 15px rgba(16, 185, 129, 0.3)';
+                eyeIcon.title = 'Click to view cached virtual try-on';
+                break;
+            case 'loading':
+                // Loading state
+                eyeIcon.innerHTML = '⏳';
+                eyeIcon.style.background = 'rgba(59, 130, 246, 0.9)';
+                eyeIcon.title = 'Generating virtual try-on...';
+                break;
+            case 'error':
+                // Error state
+                eyeIcon.innerHTML = '❌';
+                eyeIcon.style.background = 'rgba(239, 68, 68, 0.9)';
+                eyeIcon.title = 'Try-on generation failed';
+                break;
+            case 'default':
+            default:
+                // Default state: restore original SVG
+                eyeIcon.innerHTML = `
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5C7 5 2.73 8.11 1 12.5C2.73 16.89 7 20 12 20C17 20 21.27 16.89 23 12.5C21.27 8.11 17 5 12 5ZM12 17.5C9.24 17.5 7 15.26 7 12.5C7 9.74 9.24 7.5 12 7.5C14.76 7.5 17 9.74 17 12.5C17 15.26 14.76 17.5 12 17.5ZM12 9.5C10.34 9.5 9 10.84 9 12.5C9 14.16 10.34 15.5 12 15.5C13.66 15.5 15 14.16 15 12.5C15 10.84 13.66 9.5 12 9.5Z" fill="white"/>
+                    </svg>
+                `;
+                eyeIcon.style.background = 'rgba(16, 185, 129, 0.9)';
+                eyeIcon.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+                eyeIcon.title = 'Click to generate virtual try-on';
+                break;
         }
     }
 
@@ -354,14 +478,19 @@ export class VisualIndicators {
      * @param {HTMLImageElement} img - Product image element
      * @param {string} tryonImageUrl - Generated try-on image URL
      * @param {string} originalImageUrl - Original clothing image URL
+     * @param {boolean} isCached - Whether result is from cache
      * @returns {HTMLElement} Result overlay element
      */
-    createTryonResultOverlay(img, tryonImageUrl, originalImageUrl) {
+    createTryonResultOverlay(img, tryonImageUrl, originalImageUrl, isCached = false) {
         const overlay = document.createElement('div');
         overlay.className = 'ai-style-tryon-overlay';
 
         // Get the size of the original product image (same size, not scaled)
         const rect = img.getBoundingClientRect();
+
+        // Different border color for cached results
+        const borderColor = isCached ? '#059669' : '#10b981';
+        const borderStyle = isCached ? '3px solid' : '3px solid';
 
         overlay.style.cssText = `
             position: absolute;
@@ -370,7 +499,7 @@ export class VisualIndicators {
             padding: 10px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             z-index: 10001;
-            border: 3px solid #10b981;
+            border: ${borderStyle} ${borderColor};
         `;
 
         // Create try-on image with same dimensions as original
@@ -387,6 +516,27 @@ export class VisualIndicators {
         `;
 
         overlay.appendChild(tryonImg);
+
+        // Add cached indicator badge if from cache
+        if (isCached) {
+            const cacheBadge = document.createElement('div');
+            cacheBadge.textContent = '📦 Cached';
+            cacheBadge.style.cssText = `
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                z-index: 10002;
+            `;
+            overlay.appendChild(cacheBadge);
+        }
+
         this.positionTryonOverlay(overlay, img);
 
         return overlay;

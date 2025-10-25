@@ -136,237 +136,361 @@ class GeminiAPIManager {
         }
     }
 
-    // Generate virtual try-on image/analysis
+    // ============================================
+    // PRIVATE HELPER METHODS FOR generateTryOn
+    // ============================================
+
+    /**
+     * Get and validate API key from storage
+     * @private
+     * @returns {Promise<string>} The API key
+     * @throws {Error} If API key is not configured
+     */
+    async _getAPIKey() {
+        const result = await chrome.storage.local.get(['geminiAPIKey']);
+        if (!result.geminiAPIKey) {
+            throw new Error('Gemini API key not configured. Please add your API key in settings.');
+        }
+        return result.geminiAPIKey;
+    }
+
+    /**
+     * Validate and prepare images for API
+     * @private
+     * @param {string} userPhoto - User photo data URL or base64
+     * @param {string} clothingImage - Clothing image data URL or base64
+     * @returns {Object} Object containing prepared image data and MIME types
+     * @throws {Error} If image data is invalid
+     */
+    _validateAndPrepareImages(userPhoto, clothingImage) {
+        // Prepare images for API (ensure base64 format)
+        const userPhotoData = this.cleanBase64Image(userPhoto);
+        const clothingImageData = this.cleanBase64Image(clothingImage);
+
+        // Validate that we have actual data
+        if (!userPhotoData || userPhotoData.length === 0) {
+            throw new Error('User photo data is empty or invalid');
+        }
+        if (!clothingImageData || clothingImageData.length === 0) {
+            throw new Error('Clothing image data is empty or invalid');
+        }
+
+        // Detect MIME types from data URLs or default to jpeg
+        const userPhotoMimeType = this.detectMimeType(userPhoto);
+        const clothingImageMimeType = this.detectMimeType(clothingImage);
+
+        console.log('🖼️ User photo MIME type:', userPhotoMimeType);
+        console.log('🖼️ Clothing image MIME type:', clothingImageMimeType);
+        console.log('🖼️ User photo data length:', userPhotoData.length);
+        console.log('🖼️ Clothing image data length:', clothingImageData.length);
+
+        return {
+            userPhotoData,
+            clothingImageData,
+            userPhotoMimeType,
+            clothingImageMimeType
+        };
+    }
+
+    /**
+     * Build the image generation request body
+     * @private
+     * @param {string} userPhotoData - Clean base64 user photo data
+     * @param {string} clothingImageData - Clean base64 clothing image data
+     * @param {string} userPhotoMimeType - User photo MIME type
+     * @param {string} clothingImageMimeType - Clothing image MIME type
+     * @param {Object} options - Generation options (e.g., outfitDescription)
+     * @returns {Object} The request body for Gemini API
+     */
+    _buildImageGenerationRequest(userPhotoData, clothingImageData, userPhotoMimeType, clothingImageMimeType, options) {
+        const prompt = this.createImageGenerationPrompt(options);
+
+        return {
+            contents: [{
+                parts: [
+                    {
+                        inline_data: {
+                            mime_type: userPhotoMimeType,
+                            data: userPhotoData
+                        }
+                    },
+                    {
+                        inline_data: {
+                            mime_type: clothingImageMimeType,
+                            data: clothingImageData
+                        }
+                    },
+                    {
+                        text: prompt
+                    }
+                ]
+            }],
+            generationConfig: {
+                responseModalities: ["Image"],  // CRITICAL: Request image output!
+                imageConfig: {
+                    aspectRatio: "3:4"  // Portrait aspect ratio for fashion photos
+                },
+                temperature: 1.0,
+                topK: 40,
+                topP: 0.95
+            }
+        };
+    }
+
+    /**
+     * Make API request to Gemini
+     * @private
+     * @param {Object} requestBody - The request body
+     * @param {string} apiKey - The API key
+     * @returns {Promise<Object>} The API response data
+     * @throws {Error} If API request fails
+     */
+    async _makeAPIRequest(requestBody, apiKey) {
+        const url = `${GEMINI_IMAGE_GENERATION_ENDPOINT}:generateContent`;
+
+        console.log('📤 Sending request to Gemini API...');
+        console.log('🔍 MODEL:', url.split('/').pop().split(':')[0]);
+        console.log('🔍 FULL URL:', url);
+        console.log('🔍 Request body structure:', {
+            contentsLength: requestBody.contents.length,
+            partsLength: requestBody.contents[0].parts.length,
+            partTypes: requestBody.contents[0].parts.map(p => p.text ? 'text' : 'image'),
+            config: requestBody.generationConfig,
+            imagesSizes: [
+                requestBody.contents[0].parts[0].inline_data.data.length,
+                requestBody.contents[0].parts[1].inline_data.data.length
+            ]
+        });
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        console.log('📥 Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('📥 Received response from Gemini API');
+        console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
+
+        return data;
+    }
+
+    /**
+     * Validate API response structure and check for errors
+     * @private
+     * @param {Object} data - The API response data
+     * @throws {Error} If response is invalid or contains errors
+     */
+    _validateAPIResponse(data) {
+        // Check for safety/content filters or blocks
+        if (data.promptFeedback) {
+            console.log('⚠️ Prompt Feedback:', data.promptFeedback);
+            if (data.promptFeedback.blockReason) {
+                throw new Error(`Content blocked by Gemini: ${data.promptFeedback.blockReason}. Safety ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)}`);
+            }
+        }
+
+        // Check for candidates
+        if (!data.candidates || data.candidates.length === 0) {
+            console.error('❌ No candidates in response. Full data:', JSON.stringify(data, null, 2));
+            throw new Error(`No candidates returned from Gemini API. This might mean: content was blocked, or the model couldn't generate an image. Full response: ${JSON.stringify(data)}`);
+        }
+
+        console.log('🔍 Candidates:', data.candidates);
+        console.log('🔍 First Candidate:', data.candidates?.[0]);
+
+        // Check finish reason
+        const finishReason = data.candidates?.[0]?.finishReason;
+        if (finishReason && finishReason !== 'STOP') {
+            console.warn('⚠️ Unusual finish reason:', finishReason);
+            if (finishReason === 'SAFETY') {
+                throw new Error(`Content generation stopped due to safety filters. Finish reason: ${finishReason}. Safety ratings: ${JSON.stringify(data.candidates[0].safetyRatings)}`);
+            } else if (finishReason === 'RECITATION') {
+                throw new Error('Content generation stopped due to recitation concerns.');
+            } else {
+                console.warn(`Generation finished with reason: ${finishReason}`);
+            }
+        }
+
+        console.log('🔍 Content:', data.candidates?.[0]?.content);
+        console.log('🔍 Parts:', data.candidates?.[0]?.content?.parts);
+
+        // Check for content parts
+        const parts = data.candidates?.[0]?.content?.parts;
+        if (!parts || parts.length === 0) {
+            console.error('❌ No parts found in response. Full data:', JSON.stringify(data, null, 2));
+            throw new Error(`No content parts in Gemini response. Full candidate: ${JSON.stringify(data.candidates?.[0])}`);
+        }
+
+        console.log(`🔍 Found ${parts.length} parts in response`);
+    }
+
+    /**
+     * Extract generated image and text from response parts
+     * @private
+     * @param {Array} parts - The response parts from Gemini API
+     * @returns {Object} Object containing generatedImageBase64 and responseText
+     */
+    _extractResponseContent(parts) {
+        let generatedImageBase64 = null;
+        let responseText = null;
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            console.log(`🔍 Part ${i}:`, Object.keys(part));
+
+            if (part.inline_data && part.inline_data.data) {
+                // Found generated image
+                generatedImageBase64 = part.inline_data.data;
+                console.log(`✅ Generated image received from Gemini (Part ${i})`);
+                console.log(`🔍 Image size: ${generatedImageBase64.length} characters`);
+            } else if (part.inlineData && part.inlineData.data) {
+                // Try camelCase version
+                generatedImageBase64 = part.inlineData.data;
+                console.log(`✅ Generated image received from Gemini - camelCase (Part ${i})`);
+                console.log(`🔍 Image size: ${generatedImageBase64.length} characters`);
+            } else if (part.text) {
+                // Found text response
+                responseText = part.text;
+                console.log(`📝 Text response received (Part ${i}): ${responseText.substring(0, 100)}...`);
+            } else {
+                console.log(`⚠️ Unknown part type (Part ${i}):`, part);
+            }
+        }
+
+        return { generatedImageBase64, responseText };
+    }
+
+    /**
+     * Validate that generated image is different from input images
+     * @private
+     * @param {string} generatedImageBase64 - The generated image data
+     * @param {string} userPhotoData - The original user photo data
+     * @param {string} clothingImageData - The original clothing image data
+     * @throws {Error} If generated image is identical to inputs
+     */
+    _validateGeneratedImage(generatedImageBase64, userPhotoData, clothingImageData) {
+        const isSameAsUserPhoto = generatedImageBase64 === userPhotoData;
+        const isSameAsClothing = generatedImageBase64 === clothingImageData;
+
+        if (isSameAsUserPhoto) {
+            console.error('❌ Generated image is identical to user photo!');
+            throw new Error('Gemini API returned the input user photo instead of generating a new image. This is not a valid try-on result.');
+        }
+
+        if (isSameAsClothing) {
+            console.error('❌ Generated image is identical to clothing image!');
+            throw new Error('Gemini API returned the input clothing image instead of generating a new image. This is not a valid try-on result.');
+        }
+
+        console.log('✅ Verified: Generated image is different from both input images');
+    }
+
+    /**
+     * Build the success result object
+     * @private
+     * @param {string} generatedImageBase64 - The generated image data
+     * @param {string} responseText - The optional text response
+     * @param {Array} parts - The response parts (for MIME type detection)
+     * @returns {Object} The result object
+     * @throws {Error} If no content was generated
+     */
+    _buildSuccessResult(generatedImageBase64, responseText, parts) {
+        const result_data = {
+            success: true,
+            message: 'Try-on image generated successfully'
+        };
+
+        if (generatedImageBase64) {
+            // Get the actual MIME type from the response (might be PNG, not JPEG)
+            const responseMimeType = parts[0].inlineData?.mimeType || parts[0].inline_data?.mime_type || 'image/png';
+            console.log('🔍 Generated image MIME type:', responseMimeType);
+
+            // Convert to data URL with correct MIME type
+            result_data.imageUrl = `data:${responseMimeType};base64,${generatedImageBase64}`;
+            result_data.imageBase64 = generatedImageBase64;
+            result_data.mimeType = responseMimeType;
+            console.log('🎨 Virtual try-on image generated successfully');
+        }
+
+        if (responseText) {
+            result_data.description = responseText;
+        }
+
+        if (!generatedImageBase64 && !responseText) {
+            throw new Error('No image or text response from Gemini API');
+        }
+
+        return result_data;
+    }
+
+    // ============================================
+    // MAIN PUBLIC METHOD
+    // ============================================
+
+    /**
+     * Generate virtual try-on image/analysis
+     *
+     * This is the main orchestration method that coordinates the entire try-on generation process.
+     * It delegates specific responsibilities to focused helper methods for better maintainability.
+     *
+     * @param {string} userPhoto - User photo data URL or base64
+     * @param {string} clothingImage - Clothing image data URL or base64
+     * @param {Object} options - Generation options (e.g., outfitDescription)
+     * @returns {Promise<Object>} Result object with success status and generated image
+     */
     async generateTryOn(userPhoto, clothingImage, options = {}) {
         try {
             console.log('🎨 Generating virtual try-on image...');
-
-            // Get API key
-            const result = await chrome.storage.local.get(['geminiAPIKey']);
-            if (!result.geminiAPIKey) {
-                throw new Error('Gemini API key not configured. Please add your API key in settings.');
-            }
-
-            // ALWAYS generate fresh images - no caching
-            console.log('🔄 Generating fresh try-on image (caching disabled)');
-
-            // NOTE: Caching is intentionally disabled to ensure fresh generation every time
-            // This guarantees unique results for each request
-
-            // Prepare images for API (ensure base64 format)
-            const userPhotoData = this.cleanBase64Image(userPhoto);
-            const clothingImageData = this.cleanBase64Image(clothingImage);
-
-            // Validate that we have actual data
-            if (!userPhotoData || userPhotoData.length === 0) {
-                throw new Error('User photo data is empty or invalid');
-            }
-            if (!clothingImageData || clothingImageData.length === 0) {
-                throw new Error('Clothing image data is empty or invalid');
-            }
-
-            // Detect MIME types from data URLs or default to jpeg
-            const userPhotoMimeType = this.detectMimeType(userPhoto);
-            const clothingImageMimeType = this.detectMimeType(clothingImage);
-
-            console.log('🖼️ User photo MIME type:', userPhotoMimeType);
-            console.log('🖼️ Clothing image MIME type:', clothingImageMimeType);
-            console.log('🖼️ User photo data length:', userPhotoData.length);
-            console.log('🖼️ Clothing image data length:', clothingImageData.length);
 
             // Log outfit description if provided
             if (options.outfitDescription) {
                 console.log('👗 Using outfit description:', options.outfitDescription.substring(0, 100) + '...');
             }
 
-            // Create prompt for virtual try-on IMAGE GENERATION
-            const prompt = this.createImageGenerationPrompt(options);
+            // Step 1: Get and validate API key
+            const apiKey = await this._getAPIKey();
 
-            // Call Gemini 2.5 Flash Image Generation API
-            // Following official docs: use v1beta and x-goog-api-key header
-            const url = `${GEMINI_IMAGE_GENERATION_ENDPOINT}:generateContent`;
+            // Step 2: Validate and prepare images
+            const { userPhotoData, clothingImageData, userPhotoMimeType, clothingImageMimeType } =
+                this._validateAndPrepareImages(userPhoto, clothingImage);
 
-            const requestBody = {
-                contents: [{
-                    parts: [
-                        {
-                            inline_data: {
-                                mime_type: userPhotoMimeType,
-                                data: userPhotoData
-                            }
-                        },
-                        {
-                            inline_data: {
-                                mime_type: clothingImageMimeType,
-                                data: clothingImageData
-                            }
-                        },
-                        {
-                            text: prompt
-                        }
-                    ]
-                }],
-                generationConfig: {
-                    responseModalities: ["Image"],  // CRITICAL: Request image output!
-                    imageConfig: {
-                        aspectRatio: "3:4"  // Portrait aspect ratio for fashion photos
-                    },
-                    temperature: 1.0,
-                    topK: 40,
-                    topP: 0.95
-                }
-            };
+            // Step 3: Build API request
+            const requestBody = this._buildImageGenerationRequest(
+                userPhotoData,
+                clothingImageData,
+                userPhotoMimeType,
+                clothingImageMimeType,
+                options
+            );
 
-            console.log('📤 Sending request to Gemini API...');
-            console.log('🔍 MODEL:', url.split('/').pop().split(':')[0]);
-            console.log('🔍 FULL URL:', url);
-            console.log('🔍 Prompt:', prompt);
-            console.log('🔍 Request body structure:', {
-                contentsLength: requestBody.contents.length,
-                partsLength: requestBody.contents[0].parts.length,
-                partTypes: requestBody.contents[0].parts.map(p => p.text ? 'text' : 'image'),
-                config: requestBody.generationConfig,
-                imagesSizes: [userPhotoData.length, clothingImageData.length]
-            });
+            // Step 4: Make API call
+            const data = await this._makeAPIRequest(requestBody, apiKey);
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': result.geminiAPIKey
-                },
-                body: JSON.stringify(requestBody)
-            });
-            
-            console.log('📥 Response status:', response.status, response.statusText);
+            // Step 5: Validate response structure
+            this._validateAPIResponse(data);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-            }
+            // Step 6: Extract content from response
+            const parts = data.candidates[0].content.parts;
+            const { generatedImageBase64, responseText } = this._extractResponseContent(parts);
 
-            const data = await response.json();
-            console.log('📥 Received response from Gemini API');
-
-            // DEBUG: Log the full response structure
-            console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
-
-            // Check for safety/content filters or blocks
-            if (data.promptFeedback) {
-                console.log('⚠️ Prompt Feedback:', data.promptFeedback);
-                if (data.promptFeedback.blockReason) {
-                    throw new Error(`Content blocked by Gemini: ${data.promptFeedback.blockReason}. Safety ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)}`);
-                }
-            }
-
-            // Check for candidates
-            if (!data.candidates || data.candidates.length === 0) {
-                console.error('❌ No candidates in response. Full data:', JSON.stringify(data, null, 2));
-                throw new Error(`No candidates returned from Gemini API. This might mean: content was blocked, or the model couldn't generate an image. Full response: ${JSON.stringify(data)}`);
-            }
-
-            console.log('🔍 Candidates:', data.candidates);
-            console.log('🔍 First Candidate:', data.candidates?.[0]);
-
-            // Check finish reason
-            const finishReason = data.candidates?.[0]?.finishReason;
-            if (finishReason && finishReason !== 'STOP') {
-                console.warn('⚠️ Unusual finish reason:', finishReason);
-                if (finishReason === 'SAFETY') {
-                    throw new Error(`Content generation stopped due to safety filters. Finish reason: ${finishReason}. Safety ratings: ${JSON.stringify(data.candidates[0].safetyRatings)}`);
-                } else if (finishReason === 'RECITATION') {
-                    throw new Error('Content generation stopped due to recitation concerns.');
-                } else {
-                    console.warn(`Generation finished with reason: ${finishReason}`);
-                }
-            }
-
-            console.log('🔍 Content:', data.candidates?.[0]?.content);
-            console.log('🔍 Parts:', data.candidates?.[0]?.content?.parts);
-
-            // Extract response parts - could contain both text and images
-            const parts = data.candidates?.[0]?.content?.parts;
-
-            if (!parts || parts.length === 0) {
-                console.error('❌ No parts found in response. Full data:', JSON.stringify(data, null, 2));
-                throw new Error(`No content parts in Gemini response. Full candidate: ${JSON.stringify(data.candidates?.[0])}`);
-            }
-
-            console.log(`🔍 Found ${parts.length} parts in response`);
-
-            // Extract generated image if present
-            let generatedImageBase64 = null;
-            let responseText = null;
-
-            for (let i = 0; i < parts.length; i++) {
-                const part = parts[i];
-                console.log(`🔍 Part ${i}:`, Object.keys(part));
-                
-                if (part.inline_data && part.inline_data.data) {
-                    // Found generated image
-                    generatedImageBase64 = part.inline_data.data;
-                    console.log(`✅ Generated image received from Gemini (Part ${i})`);
-                    console.log(`🔍 Image size: ${generatedImageBase64.length} characters`);
-                } else if (part.inlineData && part.inlineData.data) {
-                    // Try camelCase version
-                    generatedImageBase64 = part.inlineData.data;
-                    console.log(`✅ Generated image received from Gemini - camelCase (Part ${i})`);
-                    console.log(`🔍 Image size: ${generatedImageBase64.length} characters`);
-                } else if (part.text) {
-                    // Found text response
-                    responseText = part.text;
-                    console.log(`📝 Text response received (Part ${i}): ${responseText.substring(0, 100)}...`);
-                } else {
-                    console.log(`⚠️ Unknown part type (Part ${i}):`, part);
-                }
-            }
-
-            // Prepare result
-            const result_data = {
-                success: true,
-                cached: false,
-                message: 'Try-on image generated successfully'
-            };
-
+            // Step 7: Validate generated image (if present)
             if (generatedImageBase64) {
-                // Verify this is NOT the same as input images
-                const isSameAsUserPhoto = generatedImageBase64 === userPhotoData;
-                const isSameAsClothing = generatedImageBase64 === clothingImageData;
-
-                if (isSameAsUserPhoto) {
-                    console.error('❌ Generated image is identical to user photo!');
-                    throw new Error('Gemini API returned the input user photo instead of generating a new image. This is not a valid try-on result.');
-                }
-
-                if (isSameAsClothing) {
-                    console.error('❌ Generated image is identical to clothing image!');
-                    throw new Error('Gemini API returned the input clothing image instead of generating a new image. This is not a valid try-on result.');
-                }
-
-                // Get the actual MIME type from the response (might be PNG, not JPEG)
-                const responseMimeType = parts[0].inlineData?.mimeType || parts[0].inline_data?.mime_type || 'image/png';
-                console.log('🔍 Generated image MIME type:', responseMimeType);
-
-                // Convert to data URL with correct MIME type
-                result_data.imageUrl = `data:${responseMimeType};base64,${generatedImageBase64}`;
-                result_data.imageBase64 = generatedImageBase64;
-                result_data.mimeType = responseMimeType;
-                console.log('🎨 Virtual try-on image generated successfully');
-                console.log('✅ Verified: Generated image is different from both input images');
+                this._validateGeneratedImage(generatedImageBase64, userPhotoData, clothingImageData);
             }
 
-            if (responseText) {
-                result_data.description = responseText;
-            }
-
-            if (!generatedImageBase64 && !responseText) {
-                throw new Error('No image or text response from Gemini API');
-            }
-
-            // NOTE: Caching disabled - always generate fresh images
-            // await this.cacheTryOnResult(cacheKey, result_data);
-
-            return result_data;
+            // Step 8: Build and return success result
+            return this._buildSuccessResult(generatedImageBase64, responseText, parts);
 
         } catch (error) {
             console.error('❌ Virtual try-on generation failed:', error);
@@ -395,44 +519,6 @@ class GeminiAPIManager {
         return prompt;
     }
 
-    // Create prompt for virtual try-on analysis (text-based)
-    createTryOnAnalysisPrompt(options = {}) {
-        return `You are an expert fashion consultant and virtual try-on assistant.
-
-I have two images:
-1. A photo of a person (user photo)
-2. A clothing item (product image)
-
-Please analyze these images and provide:
-
-1. **Compatibility Analysis**: How well would this clothing item look on this person based on:
-   - Body type and proportions
-   - Skin tone and coloring
-   - Overall style match
-   - Fit prediction
-
-2. **Styling Suggestions**: How to best wear this item:
-   - What to pair it with
-   - Occasion suitability
-   - Styling tips
-
-3. **Virtual Try-On Description**: Describe how this item would look when worn by this person:
-   - How it would fit
-   - How the colors would complement the person
-   - Overall aesthetic impression
-
-4. **Recommendation Score**: Rate the match from 1-10 with explanation.
-
-Please provide a detailed but concise analysis in JSON format:
-{
-  "compatibility_score": 0-10,
-  "fit_analysis": "description",
-  "color_match": "description",
-  "style_match": "description",
-  "styling_suggestions": ["suggestion1", "suggestion2", "suggestion3"],
-  "overall_recommendation": "recommendation text"
-}`;
-    }
 
     // Helper function to detect MIME type from data URL
     detectMimeType(imageData) {
@@ -472,76 +558,6 @@ Please provide a detailed but concise analysis in JSON format:
         return imageData;
     }
 
-    // Generate cache key for try-on images
-    generateCacheKey(userPhoto, clothingImage) {
-        // Create a simple hash from the images
-        const userHash = userPhoto.substring(0, 50);
-        const clothingHash = clothingImage.substring(0, 50);
-        return `tryon_${userHash}_${clothingHash}`;
-    }
-
-    // Get cached try-on result
-    async getCachedTryOn(cacheKey) {
-        try {
-            const result = await chrome.storage.local.get(['tryOnCache']);
-            const cache = result.tryOnCache || {};
-
-            if (cache[cacheKey]) {
-                const cached = cache[cacheKey];
-
-                // Check if cache is expired (24 hours)
-                const now = Date.now();
-                const cacheAge = now - cached.timestamp;
-                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-
-                if (cacheAge < maxAge) {
-                    console.log(`📦 Cache hit for key: ${cacheKey.substring(0, 20)}...`);
-                    return cached.data;
-                } else {
-                    console.log(`⏰ Cache expired for key: ${cacheKey.substring(0, 20)}...`);
-                    // Remove expired cache entry
-                    delete cache[cacheKey];
-                    await chrome.storage.local.set({ tryOnCache: cache });
-                }
-            }
-
-            return null;
-
-        } catch (error) {
-            console.error('Error getting cached try-on:', error);
-            return null;
-        }
-    }
-
-    // Cache try-on result
-    async cacheTryOnResult(cacheKey, data) {
-        try {
-            const result = await chrome.storage.local.get(['tryOnCache']);
-            const cache = result.tryOnCache || {};
-
-            // Limit cache size (keep max 20 entries)
-            const cacheKeys = Object.keys(cache);
-            if (cacheKeys.length >= 20) {
-                // Remove oldest entry
-                const oldestKey = cacheKeys.reduce((oldest, key) => {
-                    return cache[key].timestamp < cache[oldest].timestamp ? key : oldest;
-                }, cacheKeys[0]);
-                delete cache[oldestKey];
-                console.log(`🗑️ Removed oldest cache entry: ${oldestKey.substring(0, 20)}...`);
-            }
-
-            cache[cacheKey] = {
-                data: data,
-                timestamp: Date.now()
-            };
-
-            await chrome.storage.local.set({ tryOnCache: cache });
-            console.log(`💾 Cached try-on result: ${cacheKey.substring(0, 20)}...`);
-
-        } catch (error) {
-            console.error('Error caching try-on result:', error);
-        }
-    }
 
     // Get setup instructions for Gemini API
     getSetupInstructions() {
