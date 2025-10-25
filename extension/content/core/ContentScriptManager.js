@@ -13,6 +13,7 @@ import { ProductSearchMatcher } from '../ai/ProductSearchMatcher.js';
 
 // UI modules
 import { LoadingAnimations } from '../ui/LoadingAnimations.js';
+import { GlobalProgressIndicator } from '../ui/GlobalProgressIndicator.js';
 import { VisualIndicators } from '../ui/VisualIndicators.js';
 import { DebugInterface } from '../ui/DebugInterface.js';
 import { FilterControls } from '../ui/FilterControls.js';
@@ -49,6 +50,7 @@ export class ContentScriptManager {
 
         // UI components
         this.loadingAnimations = new LoadingAnimations();
+        this.globalProgressIndicator = new GlobalProgressIndicator();
         this.debugInterface = new DebugInterface();
 
         // Filter components
@@ -440,6 +442,9 @@ export class ContentScriptManager {
             return;
         }
 
+        // Show global progress indicator for new products
+        this.globalProgressIndicator.show(productImages.length, 'Analyzing new products');
+
         try {
             // Always analyze with style profile in background
             await this.personalStyleMatcher.initialize();
@@ -451,6 +456,8 @@ export class ContentScriptManager {
                     delayBetweenBatches: 500,
                     onProgress: (progress) => {
                         console.log(`   📊 New products background analysis: ${progress.completed}/${progress.total}`);
+                        // Update global progress indicator
+                        this.globalProgressIndicator.updateProgress(progress.completed);
                     }
                 }
             );
@@ -509,6 +516,7 @@ export class ContentScriptManager {
 
         } catch (error) {
             console.error('❌ Failed to analyze new products:', error);
+            this.globalProgressIndicator.hide();
         }
     }
 
@@ -640,6 +648,9 @@ export class ContentScriptManager {
         // Always use style analyzer for background analysis
         const productImages = this.detectedProducts.map(product => product.element);
 
+        // Show global progress indicator
+        this.globalProgressIndicator.show(productImages.length, 'Analyzing products');
+
         try {
             await this.personalStyleMatcher.initialize();
 
@@ -652,6 +663,8 @@ export class ContentScriptManager {
                     delayBetweenBatches: 500,
                     onProgress: (progress) => {
                         console.log(`   📊 Background analysis: ${progress.completed}/${progress.total}`);
+                        // Update global progress indicator
+                        this.globalProgressIndicator.updateProgress(progress.completed);
                     }
                 }
             );
@@ -672,6 +685,7 @@ export class ContentScriptManager {
 
         } catch (error) {
             console.error('❌ Background analysis failed:', error);
+            this.globalProgressIndicator.hide();
         }
     }
 
@@ -734,9 +748,13 @@ export class ContentScriptManager {
         // Show analysis loading message
         this.loadingAnimations.showLoadingAnimation(loadingMessage);
 
+        // Extract image elements from detected products
+        const productImages = this.detectedProducts.map(product => product.element);
+
+        // Show global progress indicator
+        this.globalProgressIndicator.show(productImages.length, this.currentRankingMode === 'prompt' ? 'Searching products' : 'Analyzing products');
+
         try {
-            // Extract image elements from detected products
-            const productImages = this.detectedProducts.map(product => product.element);
             console.log('📦 Product images to analyze:', productImages.length);
 
             // Initialize the analyzer
@@ -752,9 +770,11 @@ export class ContentScriptManager {
                     delayBetweenBatches: 500,
                     onProgress: (progress) => {
                         console.log(`📊 Analysis progress: ${progress.completed}/${progress.total} (${progress.percentage}%)`);
+                        // Update both loading animation and global progress indicator
                         this.loadingAnimations.updateLoadingMessage(
                             `Analyzing products: ${progress.completed}/${progress.total}`
                         );
+                        this.globalProgressIndicator.updateProgress(progress.completed);
                     }
                 }
             );
@@ -856,6 +876,7 @@ export class ContentScriptManager {
             console.error('   Error message:', error.message);
             console.error('   Error stack:', error.stack);
             this.loadingAnimations.hideLoadingAnimation();
+            this.globalProgressIndicator.hide();
             this.loadingAnimations.showErrorMessage('Analysis failed');
         }
     }
