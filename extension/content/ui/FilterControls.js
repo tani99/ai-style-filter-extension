@@ -153,9 +153,7 @@ export class FilterControls {
         const modeSection = this.createModeToggle();
         content.appendChild(modeSection);
 
-        // Score threshold slider
-        const thresholdSection = this.createThresholdSlider();
-        content.appendChild(thresholdSection);
+        // Score threshold slider removed - now automatic based on scoring rules
 
         // Style category filters (placeholder for now)
         const categorySection = this.createCategoryFilters();
@@ -258,10 +256,11 @@ export class FilterControls {
     }
 
     /**
-     * Create score threshold slider
+     * Create score threshold slider - REMOVED
+     * Now using automatic UI editing based on scoring rules
      * @returns {HTMLElement} Threshold slider section
      */
-    createThresholdSlider() {
+    /* REMOVED - createThresholdSlider() {
         const section = document.createElement('div');
         section.style.cssText = `
             margin-bottom: 24px;
@@ -352,7 +351,7 @@ export class FilterControls {
         section.appendChild(slider);
 
         return section;
-    }
+    } */
 
     /**
      * Create style category filters
@@ -572,15 +571,7 @@ export class FilterControls {
             }
         }
 
-        // Update score threshold slider
-        const slider = this.controlsPanel.querySelector('input[type="range"]');
-        const scoreDisplay = this.controlsPanel.querySelector('#ai-style-score-display');
-        if (slider) {
-            slider.value = this.filterState.scoreThreshold;
-        }
-        if (scoreDisplay) {
-            scoreDisplay.textContent = `${this.filterState.scoreThreshold}/10`;
-        }
+        // Score threshold slider removed - now automatic based on scoring rules
 
         console.log('✅ Controls UI updated');
     }
