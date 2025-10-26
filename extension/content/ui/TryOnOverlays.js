@@ -130,7 +130,7 @@ export class TryOnOverlays {
         if (cachedData) {
             console.log('📦 Using cached try-on data');
             // Create and display result overlay from cache
-            const resultOverlay = this.createTryonResultOverlay(img, cachedData.imageUrl, img.src, true);
+            const resultOverlay = this.createTryonResultOverlay(img, cachedData.imageUrl, true);
             document.body.appendChild(resultOverlay);
             return resultOverlay;
         }
@@ -171,7 +171,7 @@ export class TryOnOverlays {
                 this.cacheTryonData(eyeIcon, response.imageUrl, response.imageBase64);
 
                 // Create and display result overlay
-                const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, img.src, false);
+                const resultOverlay = this.createTryonResultOverlay(img, response.imageUrl, false);
                 document.body.appendChild(resultOverlay);
 
                 // Remove loading overlay
@@ -335,11 +335,10 @@ export class TryOnOverlays {
      * Create result overlay for try-on
      * @param {HTMLImageElement} img - Product image element
      * @param {string} tryonImageUrl - Generated try-on image URL
-     * @param {string} originalImageUrl - Original clothing image URL
      * @param {boolean} isCached - Whether result is from cache
      * @returns {HTMLElement} Result overlay element
      */
-    createTryonResultOverlay(img, tryonImageUrl, originalImageUrl, isCached = false) {
+    createTryonResultOverlay(img, tryonImageUrl, isCached = false) {
         const overlay = document.createElement('div');
         overlay.className = 'ai-style-tryon-overlay';
 
@@ -516,17 +515,21 @@ export class TryOnOverlays {
      */
     async convertImageToBase64(imageUrl) {
         try {
-            const response = await fetch(imageUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch image: ${response.status}`);
-            }
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
+            console.log('🔄 Requesting background script to fetch image (bypasses CORS)');
+
+            // Use background script to fetch image (bypasses CORS restrictions)
+            const response = await chrome.runtime.sendMessage({
+                action: 'fetchImageAsBase64',
+                imageUrl: imageUrl
             });
+
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to fetch image via background script');
+            }
+
+            console.log('✅ Image fetched successfully via background script');
+            return response.dataUrl;
+
         } catch (error) {
             console.error('Error converting image to base64:', error);
             throw error;
