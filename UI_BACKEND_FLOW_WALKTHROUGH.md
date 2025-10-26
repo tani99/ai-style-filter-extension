@@ -21,19 +21,19 @@
 3. **CSS Injection** (lines 92-95): Injects filter styles into the page
 4. **Storage Loading** (lines 97-103): Loads user's style profile and UI settings
 5. **Event Setup** (lines 111-112): Sets up event listeners
-6. **UI Display** (lines 117-118): Shows filter controls automatically
+6. **UI Display** (lines 117-118): Shows style overlay controls automatically
 7. **Product Detection** (lines 123-124): Runs initial product detection
 
 **Key Code Pointers**:
 - Lines 36-42: Site and page type detection
 - Lines 44-77: Component initialization
 - Lines 97-103: Parallel storage loading
-- Lines 117-118: Automatic UI display
+- Lines 117-118: Automatic style overlay controls display
 
 ## 3. **UI Components Rendering**
 
-### A. **Filter Controls Panel**
-**File**: `extension/content/ui/FilterControls.js` (lines 28-174)
+### A. **Style Overlay Controller Panel**
+**File**: `extension/content/ui/StyleOverlayController.js` (lines 28-174)
 
 **Rendering Process**:
 1. **Panel Creation** (lines 28-34): Checks if panel already exists

@@ -16,7 +16,7 @@ import { LoadingAnimations } from '../ui/LoadingAnimations.js';
 import { GlobalProgressIndicator } from '../ui/GlobalProgressIndicator.js';
 import { VisualIndicators } from '../ui/VisualIndicators.js';
 import { DebugInterface } from '../ui/DebugInterface.js';
-import { FilterControls } from '../ui/FilterControls.js';
+import { StyleOverlayController } from '../ui/StyleOverlayController.js';
 
 // Utility modules
 import { EventListeners } from '../utils/EventListeners.js';
@@ -56,7 +56,7 @@ export class ContentScriptManager {
         // Filter components
         this.filterStateManager = new FilterStateManager();
         this.visualIndicators = new VisualIndicators(false);
-        this.filterControls = new FilterControls();
+        this.styleOverlayController = new StyleOverlayController();
 
         // Event management
         this.eventListeners = new EventListeners(this);
@@ -70,7 +70,7 @@ export class ContentScriptManager {
         this.productAnalysisResults = new Map(); // Map of image -> analysis result
 
         // UI visibility state
-        this.showStyleSuggestions = false; // true = show UI suggestions, false = hide UI
+        this.isShowingStyleSuggestions = false; // true = show UI suggestions, false = hide UI
 
         // Performance settings
         // Viewport analysis moved to separate module (ViewportAnalysis.js)
@@ -114,8 +114,8 @@ export class ContentScriptManager {
         // Viewport analysis moved to separate module (ViewportAnalysis.js)
         // Currently unused - extension uses one-time detection instead
 
-        // Show filter controls on the page automatically (non-blocking)
-        this.filterControls.showControls();
+        // Show style overlay controls on the page automatically (non-blocking)
+        this.styleOverlayController.showControls();
 
         // Notify that initialization is complete (non-blocking)
         this.notifyBackgroundScript();
@@ -187,6 +187,28 @@ export class ContentScriptManager {
 
         // EventListeners handles message setup directly
         this.eventListeners.setupMessageListeners();
+
+        // Listen for showStyleSuggestions changes from popup
+        this.setupUIVisibilityListener();
+    }
+
+    /**
+     * Setup storage listener for UI visibility changes
+     * @private
+     */
+    setupUIVisibilityListener() {
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'local' && changes.showStyleSuggestions) {
+                const newValue = changes.showStyleSuggestions.newValue;
+                const oldValue = changes.showStyleSuggestions.oldValue;
+
+                console.log(`🔄 showStyleSuggestions changed: ${oldValue} → ${newValue}`);
+
+                // Update state and toggle UI
+                this.isShowingStyleSuggestions = newValue;
+                this.showStyleSuggestions(newValue);
+            }
+        });
     }
 
     // Viewport analysis code moved to /detection/ViewportAnalysis.js
@@ -307,61 +329,86 @@ export class ContentScriptManager {
     async analyzeNewProducts(newProducts, startIndex) {
         console.log(`🔍 Analyzing ${newProducts.length} new products starting at index ${startIndex}...`);
 
-        const productImages = newProducts.map(product => product.element);
-
         if (!this.styleProfile) {
             console.log('ℹ️ No style profile - skipping analysis');
             return;
         }
 
         // Show global progress indicator for new products
-        this.globalProgressIndicator.show(productImages.length, 'Analyzing new products');
+        this.globalProgressIndicator.show(newProducts.length, 'Analyzing new products');
 
         try {
-            // Always analyze with style profile in background
             await this.personalStyleMatcher.initialize();
-            const styleResults = await this.personalStyleMatcher.analyzeBatch(
-                productImages,
-                { styleProfile: this.styleProfile },
-                {
-                    batchSize: 10,
-                    delayBetweenBatches: 500,
-                    onProgress: (progress) => {
-                        console.log(`   📊 New products background analysis: ${progress.completed}/${progress.total}`);
-                        // Update global progress indicator
-                        this.globalProgressIndicator.updateProgress(progress.completed);
-                    }
-                }
-            );
 
-            // Store style results
-            productImages.forEach((img, localIndex) => {
-                this.productAnalysisResults.set(img, styleResults[localIndex]);
+            // Track completion count for progress updates
+            let completedCount = 0;
+
+            // Process ALL new products concurrently - same pattern as analyzeCombined
+            const analysisPromises = newProducts.map(async (product, localIndex) => {
+                const img = product.element;
+                const globalIndex = startIndex + localIndex;
+
+                try {
+                    // Analyze product with style profile
+                    const styleResult = await this.personalStyleMatcher.analyzeProduct(img, this.styleProfile);
+
+                    // Extract and store description
+                    if (styleResult && styleResult.description) {
+                        img.dataset.aiOutfitDescription = styleResult.description;
+                    }
+
+                    // Store style analysis result
+                    if (styleResult) {
+                        this.productAnalysisResults.set(img, styleResult);
+                    }
+
+                    // Update progress
+                    completedCount++;
+                    this.globalProgressIndicator.updateProgress(completedCount);
+
+                    console.log(`✅ [${completedCount}/${newProducts.length}] New product analyzed (score: ${styleResult?.score})`);
+
+                    // ⚡ PROGRESSIVE UI UPDATE: Add score overlay immediately if UI is enabled
+                    if (this.showStyleSuggestions && styleResult && product?.element?.isConnected) {
+                        const isFallback = styleResult.success === false ||
+                                          (styleResult.method && styleResult.method.includes('fallback'));
+
+                        if (!isFallback) {
+                            try {
+                                this.visualIndicators.addScoreOverlay(
+                                    product.element,
+                                    styleResult.score,
+                                    styleResult.reasoning,
+                                    globalIndex,
+                                    'style'
+                                );
+                            } catch (overlayError) {
+                                console.error(`❌ Failed to add score overlay for new product ${globalIndex + 1}:`, overlayError);
+                            }
+                        }
+                    }
+
+                    return { success: true, index: localIndex };
+
+                } catch (error) {
+                    console.error(`❌ Error analyzing new product ${globalIndex + 1}:`, error);
+                    completedCount++;
+                    this.globalProgressIndicator.updateProgress(completedCount);
+                    return { success: false, index: localIndex, error };
+                }
             });
+
+            // Wait for all analyses to complete
+            console.log(`🚀 Started ${analysisPromises.length} concurrent analysis requests for new products...`);
+            await Promise.all(analysisPromises);
 
             console.log(`✅ Background style analysis complete for ${newProducts.length} new products`);
 
-            // Show UI based on visibility setting
-            if (this.showStyleSuggestions) {
-                // Show style badges
-                styleResults.forEach((result, localIndex) => {
-                    const globalIndex = startIndex + localIndex;
-                    const product = newProducts[localIndex];
-                    const isFallback = result.success === false || result.method?.includes('fallback');
-                    
-                    if (product?.element && !isFallback) {
-                        this.visualIndicators.addScoreOverlay(
-                            product.element,
-                            result.score,
-                            result.reasoning,
-                            globalIndex,
-                            'style'
-                        );
-                    }
-                });
-            } else {
-                console.log('ℹ️ Style suggestions hidden - UI badges not shown for new products');
-            }
+            // ⚡ Score overlays are now added progressively during analysis
+            // No batch UI update needed here - overlays appear as soon as each analysis completes
+
+            // Hide progress indicator
+            this.globalProgressIndicator.hide();
 
         } catch (error) {
             console.error('❌ Failed to analyze new products:', error);
@@ -469,6 +516,26 @@ export class ContentScriptManager {
 
                         console.log(`✅ [${completedCount}/${detectedImages.length}] Completed analysis (score: ${styleResult?.score})`);
 
+                        // ⚡ PROGRESSIVE UI UPDATE: Add score overlay immediately if UI is enabled
+                        if (this.showStyleSuggestions && styleResult && product?.element?.isConnected) {
+                            const isFallback = styleResult.success === false ||
+                                              (styleResult.method && styleResult.method.includes('fallback'));
+
+                            if (!isFallback) {
+                                try {
+                                    this.visualIndicators.addScoreOverlay(
+                                        product.element,
+                                        styleResult.score,
+                                        styleResult.reasoning,
+                                        i,
+                                        'style'
+                                    );
+                                } catch (overlayError) {
+                                    console.error(`❌ Failed to add score overlay for product ${i + 1}:`, overlayError);
+                                }
+                            }
+                        }
+
                     } else {
                         // WITHOUT style profile: Just generate outfit description
                         const description = await this.personalStyleMatcher.generateOutfitDescription(img);
@@ -501,17 +568,8 @@ export class ContentScriptManager {
 
             console.log(`✅ Combined analysis complete for ${detectedImages.length} products`);
 
-            // Show UI based on visibility setting (only if we have style profile)
-            if (hasStyleProfile && this.showStyleSuggestions) {
-                // Create array of [product, result] pairs for safe updating
-                const productResultPairs = detectedImages.map((product, i) => ({
-                    product,
-                    result: this.productAnalysisResults.get(product.element),
-                    index: i
-                })).filter(pair => pair.result); // Only include products that have results
-
-                this.addScoreOverlays(productResultPairs);
-            }
+            // ⚡ Score overlays are now added progressively during analysis (see lines 472-490)
+            // No batch UI update needed here - overlays appear as soon as each analysis completes
 
             // Hide progress indicator
             this.globalProgressIndicator.hide();
@@ -698,27 +756,27 @@ export class ContentScriptManager {
 
 
     /**
-     * Toggle filter controls visibility
+     * Toggle style overlay controls visibility
      */
-    toggleFilterControls() {
-        this.filterControls.toggleControls();
+    toggleStyleOverlayControls() {
+        this.styleOverlayController.toggleControls();
     }
 
     /**
-     * Show filter controls
+     * Show style overlay controls
      */
-    showFilterControls() {
-        this.filterControls.showControls();
-        // Sync FilterControls UI with FilterStateManager state
+    showStyleOverlayControls() {
+        this.styleOverlayController.showControls();
+        // Sync StyleOverlayController UI with FilterStateManager state
         const currentState = this.filterStateManager.getFilterState();
-        this.filterControls.setFilterState(currentState);
+        this.styleOverlayController.setFilterState(currentState);
     }
 
     /**
-     * Hide filter controls
+     * Hide style overlay controls
      */
-    hideFilterControls() {
-        this.filterControls.hideControls();
+    hideStyleOverlayControls() {
+        this.styleOverlayController.hideControls();
     }
 
     /**

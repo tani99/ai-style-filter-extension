@@ -27,7 +27,7 @@ import { VisualIndicators } from './ui/VisualIndicators.js';
 import { DebugInterface } from './ui/DebugInterface.js';
 import { LoadingAnimations } from './ui/LoadingAnimations.js';
 import { GlobalProgressIndicator } from './ui/GlobalProgressIndicator.js';
-import { FilterControls } from './ui/FilterControls.js';
+import { StyleOverlayController } from './ui/StyleOverlayController.js';
 import { VirtualTryOnUI } from './ui/VirtualTryOnUI.js';
 
 // Import utility modules
@@ -55,7 +55,7 @@ window.VisualIndicators = VisualIndicators;
 window.DebugInterface = DebugInterface;
 window.LoadingAnimations = LoadingAnimations;
 window.GlobalProgressIndicator = GlobalProgressIndicator;
-window.FilterControls = FilterControls;
+window.StyleOverlayController = StyleOverlayController;
 window.VirtualTryOnUI = VirtualTryOnUI;
 window.DOMUtils = DOMUtils;
 window.GeometryUtils = GeometryUtils;

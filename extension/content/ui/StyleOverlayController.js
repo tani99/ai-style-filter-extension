@@ -1,10 +1,10 @@
 import { FILTER_DEFAULTS } from '../config/FilterDefaults.js';
 
 /**
- * FilterControls manages the UI for style-based filtering controls
- * Provides toggle switches, sliders, and filter options
+ * StyleOverlayController manages the UI for style overlay controls
+ * Provides toggle switches and controls for showing/hiding style recommendations
  */
-export class FilterControls {
+export class StyleOverlayController {
     constructor() {
         this.controlsPanel = null;
         this.isVisible = false;
@@ -548,7 +548,11 @@ export class FilterControls {
     setFilterState(state) {
         this.filterState = { ...this.filterState, ...state };
         this.updateControlsUI();
-        this.triggerFilterChange();
+        // Trigger filter change by updating data attributes directly
+        document.querySelectorAll('img[data-ai-style-detected="true"]').forEach(img => {
+            img.dataset.aiFilterMode = this.filterState.mode;
+            img.dataset.aiScoreThreshold = this.filterState.scoreThreshold || '7';
+        });
     }
 
     /**
@@ -590,7 +594,11 @@ export class FilterControls {
                 if (newFilterState && newFilterState.mode !== this.filterState.mode) {
                     this.filterState.mode = newFilterState.mode;
                     this.updateControlsUI();
-                    this.triggerFilterChange();
+                    // Update data attributes directly when storage changes
+                    document.querySelectorAll('img[data-ai-style-detected="true"]').forEach(img => {
+                        img.dataset.aiFilterMode = this.filterState.mode;
+                        img.dataset.aiScoreThreshold = this.filterState.scoreThreshold || '7';
+                    });
                 }
             }
         });
@@ -629,5 +637,5 @@ export class FilterControls {
 
 // Expose on window for debugging
 if (typeof window !== 'undefined') {
-    window.FilterControls = FilterControls;
+    window.StyleOverlayController = StyleOverlayController;
 }
