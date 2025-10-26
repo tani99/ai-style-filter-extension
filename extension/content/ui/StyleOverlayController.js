@@ -23,17 +23,45 @@ export class StyleOverlayController {
     }
 
     /**
-     * Create and inject the filter controls panel into the page
+     * Create and inject the style overlay control panel into the page
      */
     createControlsPanel() {
         if (this.controlsPanel) {
-            console.log('⚠️ Filter controls already exist');
+            console.log('⚠️ Style overlay controls already exist');
             return;
         }
 
-        console.log('🎛️ Creating filter controls panel...');
+        console.log('🎛️ Creating style overlay control panel...');
 
-        // Create main container
+        // Create main panel container
+        const panel = this.controlPanel();
+        
+        // Create header section
+        const header = this.header();
+        
+        // Create content section
+        const content = this.content();
+
+        // Assemble the complete panel
+        panel.appendChild(header);
+        panel.appendChild(content);
+
+        // Add drag functionality to header
+        this.setupDragHandlers(header, panel);
+
+        // Add to document
+        document.body.appendChild(panel);
+        this.controlsPanel = panel;
+        this.isVisible = true;
+
+        console.log('✅ Style overlay control panel created');
+    }
+
+    /**
+     * Create the main control panel container
+     * @returns {HTMLElement} Main panel element
+     */
+    controlPanel() {
         const panel = document.createElement('div');
         panel.className = 'ai-style-filter-controls';
         panel.dataset.aiStyleControls = 'true';
@@ -55,7 +83,14 @@ export class StyleOverlayController {
             cursor: move;
         `;
 
-        // Create header
+        return panel;
+    }
+
+    /**
+     * Create the header section with title and buttons
+     * @returns {HTMLElement} Header element
+     */
+    header() {
         const header = document.createElement('div');
         header.style.cssText = `
             padding: 16px 20px;
@@ -68,6 +103,22 @@ export class StyleOverlayController {
         `;
         header.dataset.aiStyleHeader = 'true';
 
+        // Add title
+        const title = this.title();
+        header.appendChild(title);
+
+        // Add button container
+        const buttonContainer = this.buttonContainer();
+        header.appendChild(buttonContainer);
+
+        return header;
+    }
+
+    /**
+     * Create the panel title
+     * @returns {HTMLElement} Title element
+     */
+    title() {
         const title = document.createElement('h3');
         title.textContent = '🎨 Style Filter';
         title.style.cssText = `
@@ -75,14 +126,36 @@ export class StyleOverlayController {
             font-size: 18px;
             font-weight: 600;
         `;
+        return title;
+    }
 
+    /**
+     * Create the button container with collapse and close buttons
+     * @returns {HTMLElement} Button container element
+     */
+    buttonContainer() {
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = `
             display: flex;
             gap: 8px;
         `;
 
-        // Collapse button
+        // Add collapse button
+        const collapseButton = this.collapseButton();
+        buttonContainer.appendChild(collapseButton);
+
+        // Add close button
+        const closeButton = this.closeButton();
+        buttonContainer.appendChild(closeButton);
+
+        return buttonContainer;
+    }
+
+    /**
+     * Create the collapse button
+     * @returns {HTMLElement} Collapse button element
+     */
+    collapseButton() {
         const collapseButton = document.createElement('button');
         collapseButton.textContent = '−';
         collapseButton.dataset.aiStyleCollapse = 'true';
@@ -107,7 +180,14 @@ export class StyleOverlayController {
             e.stopPropagation();
             this.toggleCollapse();
         };
+        return collapseButton;
+    }
 
+    /**
+     * Create the close button
+     * @returns {HTMLElement} Close button element
+     */
+    closeButton() {
         const closeButton = document.createElement('button');
         closeButton.textContent = '×';
         closeButton.style.cssText = `
@@ -131,17 +211,14 @@ export class StyleOverlayController {
             e.stopPropagation();
             this.hideControls();
         };
+        return closeButton;
+    }
 
-        buttonContainer.appendChild(collapseButton);
-        buttonContainer.appendChild(closeButton);
-
-        header.appendChild(title);
-        header.appendChild(buttonContainer);
-
-        // Add drag functionality
-        this.setupDragHandlers(header, panel);
-
-        // Create controls content
+    /**
+     * Create the content section with all controls
+     * @returns {HTMLElement} Content element
+     */
+    content() {
         const content = document.createElement('div');
         content.dataset.aiStyleContent = 'true';
         content.style.cssText = `
@@ -151,33 +228,22 @@ export class StyleOverlayController {
             transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
         `;
 
-        // Mode toggle (All Items vs My Style)
-        const modeSection = this.createModeToggle();
+        // Add mode toggle section
+        const modeSection = this.modeToggle();
         content.appendChild(modeSection);
 
-        // Score threshold slider removed - now automatic based on scoring rules
-
-        // Style category filters (placeholder for now)
-        const categorySection = this.createCategoryFilters();
+        // Add category filters section
+        const categorySection = this.categoryFilters();
         content.appendChild(categorySection);
 
-        // Assemble panel
-        panel.appendChild(header);
-        panel.appendChild(content);
-
-        // Add to document
-        document.body.appendChild(panel);
-        this.controlsPanel = panel;
-        this.isVisible = true;
-
-        console.log('✅ Filter controls created');
+        return content;
     }
 
     /**
      * Create mode toggle switch (All Items vs My Style)
      * @returns {HTMLElement} Mode toggle section
      */
-    createModeToggle() {
+    modeToggle() {
         const section = document.createElement('div');
         section.style.cssText = `
             margin-bottom: 24px;
@@ -369,7 +435,7 @@ export class StyleOverlayController {
      * Create style category filters
      * @returns {HTMLElement} Category filters section
      */
-    createCategoryFilters() {
+    categoryFilters() {
         const section = document.createElement('div');
         section.style.cssText = `
             margin-bottom: 16px;

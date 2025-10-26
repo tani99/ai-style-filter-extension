@@ -382,6 +382,8 @@ export class ContentScriptManager {
                                     globalIndex,
                                     'style'
                                 );
+                                console.error(`Adding score overlay for new product ${globalIndex + 1}:`, overlayError);
+
                             } catch (overlayError) {
                                 console.error(`❌ Failed to add score overlay for new product ${globalIndex + 1}:`, overlayError);
                             }
@@ -530,6 +532,7 @@ export class ContentScriptManager {
                                         i,
                                         'style'
                                     );
+                                    console.error(`Adding score overlay for product ${i + 1}:`, overlayError);
                                 } catch (overlayError) {
                                     console.error(`❌ Failed to add score overlay for product ${i + 1}:`, overlayError);
                                 }
