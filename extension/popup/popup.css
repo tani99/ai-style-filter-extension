@@ -116,90 +116,79 @@ body {
     margin-bottom: 0;
 }
 
-/* Mode Selector (3-way segmented control) */
-.mode-selector {
-    display: flex;
-    gap: 8px;
+/* Style Toggle Section */
+.style-toggle-section {
     margin-bottom: 16px;
 }
 
-.mode-option {
-    flex: 1;
-    cursor: pointer;
+.toggle-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.mode-option input[type="radio"] {
-    position: absolute;
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+}
+
+.toggle-input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.mode-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 8px;
-    background: rgba(255, 255, 255, 0.15);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    transition: all 0.2s ease;
-    min-height: 70px;
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 14px;
+    transition: background 0.3s;
 }
 
-.mode-icon {
-    font-size: 24px;
-    margin-bottom: 4px;
-    display: block;
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.mode-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+.toggle-input:checked + .toggle-slider {
+    background: #10b981;
 }
 
-.mode-option:hover .mode-card {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
-    transform: translateY(-2px);
+.toggle-input:checked + .toggle-slider:before {
+    transform: translateX(24px);
 }
 
-/* Selected state */
-.mode-option input[type="radio"]:checked + .mode-card {
-    background: rgba(255, 255, 255, 0.95);
-    border-color: rgba(255, 255, 255, 1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.mode-option input[type="radio"]:checked + .mode-card .mode-label {
-    color: #667eea;
-}
-
-/* Specific mode colors when selected */
-.mode-option input[type="radio"]#modeOff:checked + .mode-card {
-    background: rgba(107, 114, 128, 0.9);
-}
-
-.mode-option input[type="radio"]#modeOff:checked + .mode-card .mode-label {
-    color: white;
-}
-
-.mode-option input[type="radio"]#modeStyle:checked + .mode-card {
-    background: rgba(16, 185, 129, 0.9);
-}
-
-.mode-option input[type="radio"]#modeStyle:checked + .mode-card .mode-label {
-    color: white;
-}
-
-.mode-option input[type="radio"]#modePrompt:checked + .mode-card {
-    background: rgba(59, 130, 246, 0.9);
-}
-
-.mode-option input[type="radio"]#modePrompt:checked + .mode-card .mode-label {
-    color: white;
+.toggle-input:focus + .toggle-slider {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
 }
 
 /* Slider Styles */

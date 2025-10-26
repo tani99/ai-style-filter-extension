@@ -165,6 +165,65 @@ export class ProductSearchMatcher extends BaseProductMatcher {
         return `prompt_${imageHash}_${promptHash}`;
     }
 
+    /**
+     * Analyze detected products against user's prompt (moved from ContentScriptManager)
+     * This method is kept for potential future use when prompt mode is re-enabled
+     * @param {Array<Object>} detectedProducts - Array of detected product objects
+     * @param {string} userPrompt - User's search prompt
+     * @param {Object} callbacks - Callback functions for progress and completion
+     * @returns {Promise<Array>} Analysis results
+     */
+    async analyzeDetectedProducts(detectedProducts, userPrompt, callbacks = {}) {
+        console.log('🎯 ProductSearchMatcher.analyzeDetectedProducts called');
+        console.log('   Products:', detectedProducts.length);
+        console.log('   Prompt:', userPrompt);
+
+        if (detectedProducts.length === 0) {
+            console.log('ℹ️ No detected products to analyze');
+            return [];
+        }
+
+        if (!userPrompt) {
+            console.warn('⚠️ No prompt provided');
+            return [];
+        }
+
+        // Extract image elements from detected products
+        const productImages = detectedProducts.map(product => product.element);
+
+        try {
+            // Initialize the analyzer
+            await this.initialize();
+
+            // Analyze products in batches
+            console.log('🚀 Starting batch analysis...');
+            const analysisResults = await this.analyzeBatch(
+                productImages,
+                { userPrompt },
+                {
+                    batchSize: 10,
+                    delayBetweenBatches: 500,
+                    onProgress: (progress) => {
+                        console.log(`📊 Analysis progress: ${progress.completed}/${progress.total} (${progress.percentage}%)`);
+                        if (callbacks.onProgress) {
+                            callbacks.onProgress(progress);
+                        }
+                    }
+                }
+            );
+
+            console.log('✅ Batch analysis complete, results:', analysisResults);
+            return analysisResults;
+
+        } catch (error) {
+            console.error('❌ Product analysis failed:', error);
+            if (callbacks.onError) {
+                callbacks.onError(error);
+            }
+            return [];
+        }
+    }
+
 }
 
 // Export for use in other modules

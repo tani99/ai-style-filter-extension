@@ -25,31 +25,17 @@
                     <h3>🎨 Filter Mode</h3>
                 </div>
 
-                <!-- Mode Selector (2-way toggle) -->
-                <div class="mode-selector">
-                    <label class="mode-option">
-                        <input type="radio" name="filterMode" value="off" id="modeOff">
-                        <div class="mode-card">
-                            <span class="mode-icon">⏸️</span>
-                            <span class="mode-label">Off</span>
-                        </div>
-                    </label>
-                    <label class="mode-option">
-                        <input type="radio" name="filterMode" value="style" id="modeStyle">
-                        <div class="mode-card">
-                            <span class="mode-icon">✨</span>
-                            <span class="mode-label">My Style</span>
-                        </div>
-                    </label>
-                    <!-- Search mode disabled
-                    <label class="mode-option">
-                        <input type="radio" name="filterMode" value="prompt" id="modePrompt">
-                        <div class="mode-card">
-                            <span class="mode-icon">🔍</span>
-                            <span class="mode-label">Search</span>
-                        </div>
-                    </label>
-                    -->
+                <!-- Style Mode Toggle -->
+                <div class="style-toggle-section">
+                    <div class="toggle-container">
+                        <label class="toggle-label">
+                            <span class="toggle-text">My Style Mode</span>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="styleToggle" class="toggle-input">
+                                <span class="toggle-slider"></span>
+                            </div>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Prompt Input (shown only in prompt mode) -->

@@ -274,16 +274,17 @@ export class BaseProductMatcher {
     }
 
     /**
-     * Parse AI response to extract score and reasoning
+     * Parse AI response to extract score, reasoning, and description
      * Shared implementation - uses child's maxScore property
      * @param {string} response - Raw AI response
-     * @returns {Object} Parsed result with score and reasoning
+     * @returns {Object} Parsed result with score, reasoning, and description
      */
     parseAnalysisResponse(response) {
         try {
             const lines = response.split('\n');
             let score = Math.ceil(this.maxScore / 2); // Default to middle score
             let reasoning = 'Unable to analyze';
+            let description = null;
 
             for (const line of lines) {
                 if (line.includes('SCORE:')) {
@@ -296,15 +297,44 @@ export class BaseProductMatcher {
                 if (line.includes('REASON:')) {
                     reasoning = line.replace(/REASON:/i, '').trim();
                 }
+                if (line.includes('DESCRIPTION:')) {
+                    description = line.replace(/DESCRIPTION:/i, '').trim();
+                }
             }
 
-            return {
+            // If description spans multiple lines, capture the rest
+            if (description !== null) {
+                const descriptionIndex = lines.findIndex(line => line.includes('DESCRIPTION:'));
+                if (descriptionIndex !== -1) {
+                    // Get the description from the same line
+                    const firstLinePart = lines[descriptionIndex].replace(/DESCRIPTION:/i, '').trim();
+                    // Get any additional lines that don't start with SCORE: or REASON:
+                    const additionalLines = [];
+                    for (let i = descriptionIndex + 1; i < lines.length; i++) {
+                        if (!lines[i].match(/^(SCORE:|REASON:|DESCRIPTION:)/i) && lines[i].trim()) {
+                            additionalLines.push(lines[i].trim());
+                        } else if (lines[i].match(/^(SCORE:|REASON:|DESCRIPTION:)/i)) {
+                            break;
+                        }
+                    }
+                    description = [firstLinePart, ...additionalLines].join(' ').trim();
+                }
+            }
+
+            const result = {
                 success: true,
                 score,
                 reasoning,
                 method: 'ai_analysis',
                 rawResponse: response
             };
+
+            // Only include description if it was found
+            if (description) {
+                result.description = description;
+            }
+
+            return result;
 
         } catch (error) {
             console.error('Failed to parse analysis response:', error);

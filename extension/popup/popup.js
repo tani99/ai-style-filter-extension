@@ -2,10 +2,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const openDashboardBtn = document.getElementById('openDashboard');
     const statusText = document.getElementById('statusText');
     
-    // Mode selector elements
-    const modeOff = document.getElementById('modeOff');
-    const modeStyle = document.getElementById('modeStyle');
-    // const modePrompt = document.getElementById('modePrompt'); // Search mode disabled
+    // Style toggle elements
+    const styleToggle = document.getElementById('styleToggle');
     const modeStatus = document.getElementById('modeStatus');
     const modeStatusText = document.getElementById('modeStatusText');
     
@@ -29,16 +27,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load current state from storage
     loadCurrentState();
 
-    // Mode selector change handlers
-    modeOff.addEventListener('change', function() {
-        if (modeOff.checked) {
-            handleModeChange('off');
+    // Listen for storage changes to sync with website controls
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'local') {
+            if (changes.filterState) {
+                console.log('[Popup] Filter state changed, syncing UI');
+                const newFilterState = changes.filterState.newValue;
+                if (newFilterState && newFilterState.mode) {
+                    // Update popup UI based on filter state change
+                    if (newFilterState.mode === 'myStyle') {
+                        styleToggle.checked = true;
+                        updateModeStatus('style');
+                    } else {
+                        styleToggle.checked = false;
+                        updateModeStatus('off');
+                    }
+                }
+            }
         }
     });
 
-    modeStyle.addEventListener('change', function() {
-        if (modeStyle.checked) {
+    // Style toggle change handler
+    styleToggle.addEventListener('change', function() {
+        if (styleToggle.checked) {
             handleModeChange('style');
+        } else {
+            handleModeChange('off');
         }
     });
 
@@ -113,7 +127,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Turn off extension
                 await chrome.storage.local.set({
                     extensionEnabled: false,
-                    rankingMode: 'off'
+                    rankingMode: 'off',
+                    filterState: {
+                        mode: 'all',
+                        scoreThreshold: 7
+                    }
                 });
 
                 // Send message to content script to disable
@@ -132,7 +150,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 await chrome.storage.local.set({
                     userPrompt: '',
                     rankingMode: 'style',
-                    extensionEnabled: true
+                    extensionEnabled: true,
+                    filterState: {
+                        mode: 'myStyle',
+                        scoreThreshold: 7  // Fixed threshold for automatic UI editing
+                    }
                 });
 
                 // Clear prompt input
@@ -146,14 +168,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         action: 'switchToStyleMode'
                     });
                 }
-
-                // Update filter state with fixed threshold
-                const filterState = {
-                    mode: 'myStyle',
-                    scoreThreshold: 7  // Fixed threshold for automatic UI editing
-                };
-                saveFilterState(filterState);
-                sendFilterStateToContentScript(filterState);
 
                 updateModeStatus('style');
                 statusText.textContent = 'Analyzing with your style profile...';
@@ -209,22 +223,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const extensionEnabled = result.extensionEnabled !== false; // Default to true
             const rankingMode = result.rankingMode || 'off';
             const userPrompt = result.userPrompt || '';
+            const filterState = result.filterState || { mode: 'all', scoreThreshold: 7 };
 
-            // Set mode selector based on state (prompt mode disabled)
+            // Set style toggle based on state
             if (!extensionEnabled || rankingMode === 'off') {
-                modeOff.checked = true;
+                styleToggle.checked = false;
                 updateModeStatus('off');
             } else if (rankingMode === 'prompt' && userPrompt) {
                 // Prompt mode is disabled, default to off instead
                 console.log('[Popup] Prompt mode is disabled, defaulting to off');
-                modeOff.checked = true;
+                styleToggle.checked = false;
                 updateModeStatus('off');
             } else if (rankingMode === 'style') {
-                modeStyle.checked = true;
+                styleToggle.checked = true;
                 updateModeStatus('style');
             } else {
                 // Default to off
-                modeOff.checked = true;
+                styleToggle.checked = false;
                 updateModeStatus('off');
             }
 

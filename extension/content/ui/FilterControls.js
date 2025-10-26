@@ -18,6 +18,9 @@ export class FilterControls {
 
         // Filter state - use shared defaults as single source of truth
         this.filterState = { ...FILTER_DEFAULTS };
+        
+        // Listen for storage changes to sync with popup
+        this.setupStorageListener();
     }
 
     /**
@@ -245,6 +248,8 @@ export class FilterControls {
                 toggleKnob.style.transform = 'translateX(0)';
             }
 
+            // Sync with popup state
+            this.syncWithPopupState(newMode);
             this.triggerFilterChange();
         };
 
@@ -574,6 +579,54 @@ export class FilterControls {
         // Score threshold slider removed - now automatic based on scoring rules
 
         console.log('✅ Controls UI updated');
+    }
+
+    /**
+     * Setup storage listener to sync with popup changes
+     * @private
+     */
+    setupStorageListener() {
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'local' && changes.filterState) {
+                console.log('🔄 FilterControls: Storage changed, syncing state');
+                const newFilterState = changes.filterState.newValue;
+                if (newFilterState && newFilterState.mode !== this.filterState.mode) {
+                    this.filterState.mode = newFilterState.mode;
+                    this.updateControlsUI();
+                    this.triggerFilterChange();
+                }
+            }
+        });
+    }
+
+    /**
+     * Sync filter controls state with popup state
+     * @param {string} mode - New mode ('all' or 'myStyle')
+     * @private
+     */
+    async syncWithPopupState(mode) {
+        try {
+            // Update the filterState in storage
+            await chrome.storage.local.set({
+                filterState: {
+                    mode: mode,
+                    scoreThreshold: 7
+                }
+            });
+
+            // Also update the ranking mode and extension state to match
+            const rankingMode = mode === 'myStyle' ? 'style' : 'off';
+            const extensionEnabled = mode === 'myStyle';
+            
+            await chrome.storage.local.set({
+                rankingMode: rankingMode,
+                extensionEnabled: extensionEnabled
+            });
+
+            console.log('🔄 FilterControls: Synced with popup state', { mode, rankingMode, extensionEnabled });
+        } catch (error) {
+            console.error('❌ Error syncing with popup state:', error);
+        }
     }
 }
 
