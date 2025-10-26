@@ -4,9 +4,8 @@ import { GeometryUtils } from '../utils/GeometryUtils.js';
  * VisualIndicators manages overlay elements that highlight detected products
  */
 export class VisualIndicators {
-    constructor(debugMode = false, filterStateManager = null) {
+    constructor(debugMode = false) {
         this.debugMode = debugMode;
-        this.filterStateManager = filterStateManager;
         this.overlayMap = new Map(); // Track overlays by image element
         this.updateHandlers = new Map(); // Track event handlers for cleanup
     }
@@ -823,18 +822,10 @@ export class VisualIndicators {
             img.title = `Score ${score}/10 - ${reasoning}`;
         }
 
-        // Set filter state attributes for CSS reactivity
-        if (this.filterStateManager) {
-            const filterState = this.filterStateManager.getFilterState();
-            img.dataset.aiFilterMode = filterState.mode;
-            img.dataset.aiScoreThreshold = filterState.scoreThreshold;
-            console.log('   Filter state attributes set:', {
-                mode: filterState.mode,
-                threshold: filterState.scoreThreshold
-            });
-        } else {
-            console.warn('   ⚠️ No filterStateManager available - filter state not set');
-        }
+        // Set default filter state attributes for CSS reactivity
+        img.dataset.aiFilterMode = 'myStyle'; // Default to myStyle mode
+        img.dataset.aiScoreThreshold = '7'; // Default threshold
+        console.log('   Default filter state attributes set: myStyle mode, threshold 7');
 
         console.log('   Image data attributes updated');
 

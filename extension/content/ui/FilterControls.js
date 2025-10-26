@@ -5,8 +5,7 @@ import { FILTER_DEFAULTS } from '../config/FilterDefaults.js';
  * Provides toggle switches, sliders, and filter options
  */
 export class FilterControls {
-    constructor(onFilterChange) {
-        this.onFilterChange = onFilterChange; // Callback when filter settings change
+    constructor() {
         this.controlsPanel = null;
         this.isVisible = false;
         this.isCollapsed = false;
@@ -240,6 +239,7 @@ export class FilterControls {
             const newMode = this.filterState.mode === 'all' ? 'myStyle' : 'all';
             this.filterState.mode = newMode;
 
+            // Update UI visuals
             if (newMode === 'myStyle') {
                 toggleContainer.style.background = '#10b981';
                 toggleKnob.style.transform = 'translateX(24px)';
@@ -248,9 +248,16 @@ export class FilterControls {
                 toggleKnob.style.transform = 'translateX(0)';
             }
 
+            // DIRECTLY set data attributes on all detected images
+            document.querySelectorAll('img[data-ai-style-detected="true"]').forEach(img => {
+                img.dataset.aiFilterMode = newMode;
+                img.dataset.aiScoreThreshold = '7'; // Fixed threshold
+            });
+
             // Sync with popup state
             this.syncWithPopupState(newMode);
-            this.triggerFilterChange();
+            
+            console.log(`🎛️ Filter mode changed to: ${newMode} - data attributes updated directly`);
         };
 
         label.appendChild(labelText);
@@ -469,16 +476,6 @@ export class FilterControls {
         }
     }
 
-    /**
-     * Trigger filter change callback
-     * @private
-     */
-    triggerFilterChange() {
-        console.log('🔄 Filter settings changed:', this.filterState);
-        if (this.onFilterChange) {
-            this.onFilterChange(this.filterState);
-        }
-    }
 
     /**
      * Show the controls panel

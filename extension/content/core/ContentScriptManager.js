@@ -55,8 +55,8 @@ export class ContentScriptManager {
 
         // Filter components
         this.filterStateManager = new FilterStateManager();
-        this.visualIndicators = new VisualIndicators(false, this.filterStateManager);
-        this.filterControls = new FilterControls(this.handleFilterChange.bind(this));
+        this.visualIndicators = new VisualIndicators(false);
+        this.filterControls = new FilterControls();
 
         // Event management
         this.eventListeners = new EventListeners(this);
@@ -107,7 +107,6 @@ export class ContentScriptManager {
         const filterStart = performance.now();
         await this.filterStateManager.initialize();
         console.log(`⏱️ Filter state init took ${(performance.now() - filterStart).toFixed(2)}ms`);
-        this.filterStateManager.addListener(this.handleFilterStateChange.bind(this));
 
         // Set up event listeners (non-blocking)
         this.setupEventListeners();
@@ -511,7 +510,7 @@ export class ContentScriptManager {
                     index: i
                 })).filter(pair => pair.result); // Only include products that have results
 
-                this.updateProductScoresWithPairs(productResultPairs);
+                this.addScoreOverlays(productResultPairs);
             }
 
             // Hide progress indicator
@@ -538,16 +537,13 @@ export class ContentScriptManager {
         }
     }
 
-
-
-
     /**
-     * Update visual indicators with product scores (safer version with pairs)
+     * Add score overlays to product images (safer version with pairs)
      * @param {Array<Object>} productResultPairs - Array of {product, result, index} objects
      * @private
      */
-    updateProductScoresWithPairs(productResultPairs) {
-        console.log('🎨 updateProductScoresWithPairs called with', productResultPairs.length, 'pairs');
+    addScoreOverlays(productResultPairs) {
+        console.log('🎨 addScoreOverlays called with', productResultPairs.length, 'pairs');
 
         productResultPairs.forEach(({product, result, index}) => {
             console.log(`   Product ${index + 1}:`, {
@@ -607,102 +603,12 @@ export class ContentScriptManager {
     }
 
     /**
-     * Update visual indicators with product scores
-     * @param {Array<Object>} analysisResults - Analysis results
-     * @private
-     */
-    updateProductScores(analysisResults) {
-        console.log('🎨 updateProductScores called with', analysisResults.length, 'results');
-
-        analysisResults.forEach((result, index) => {
-            const product = this.detectedProducts[index];
-            console.log(`   Product ${index + 1}:`, {
-                hasProduct: !!product,
-                hasElement: !!product?.element,
-                score: result?.score,
-                reasoning: result?.reasoning
-            });
-
-            if (!result) {
-                console.warn(`   ⚠️ No result for product at index ${index}`);
-                return;
-            }
-
-            if (!product || !product.element) {
-                console.warn(`   ⚠️ Cannot add score overlay - missing product or element at index ${index}`);
-                return;
-            }
-
-            // Only show badge if analysis was successful (not a fallback)
-            const isFallback = result.success === false ||
-                              (result.method && result.method.includes('fallback'));
-
-            if (isFallback) {
-                console.log(`   ⚠️ Product ${index + 1} returned fallback result - keeping loading indicator`);
-                // Keep the loading indicator, don't replace it with a fallback badge
-            } else {
-                console.log(`   ✏️ Calling addScoreOverlay for product ${index + 1}:`, {
-                    score: result.score,
-                    scoreType: typeof result.score,
-                    reasoning: result.reasoning?.substring(0, 50),
-                    imgAlt: product.element?.alt
-                });
-                // Add score overlay to product
-                this.visualIndicators.addScoreOverlay(
-                    product.element,
-                    result.score,
-                    result.reasoning,
-                    index,
-                    'style'
-                );
-            }
-        });
-
-        console.log('✅ Visual indicators updated with scores');
-    }
-
-
-    /**
-     * Calculate average score from analysis results
-     * @param {Array<Object>} analysisResults - Analysis results
-     * @returns {number} Average score
-     * @private
-     */
-    calculateAverageScore(analysisResults) {
-        if (analysisResults.length === 0) return 0;
-
-        const totalScore = analysisResults.reduce((sum, result) => sum + result.score, 0);
-        return totalScore / analysisResults.length;
-    }
-
-
-    /**
-     * Get analysis result for a specific product image
-     * @param {HTMLImageElement} img - Product image element
-     * @returns {Object|null} Analysis result or null
-     */
-    getProductAnalysis(img) {
-        return this.productAnalysisResults.get(img) || null;
-    }
-
-    /**
      * Clear all product analysis data
      */
     clearProductAnalysis() {
         this.productAnalysisResults.clear();
         this.personalStyleMatcher.clearCache();
         console.log('🧹 Product analysis data cleared');
-    }
-
-    /**
-     * Test site-specific selectors
-     */
-    testSelectors() {
-        const results = this.candidateFinder.testSelectors();
-        if (this.debugInterface.isDebugEnabled()) {
-            this.debugInterface.logSelectorStats(results);
-        }
-        return results;
     }
 
     /**
@@ -788,47 +694,8 @@ export class ContentScriptManager {
         this.runInitialDetection();
     }
 
-    /**
-     * Handle new images detected via lazy loading
-     * @private
-     */
-    async handleNewImagesDetected() {
-        console.log('🖼️ New images detected, running detection...');
-        await this.detectNewImages();
-    }
-
     // Message handling moved to EventListeners.js for centralized management
 
-    /**
-     * Handle filter state changes from FilterStateManager
-     * @param {Object} filterState - New filter state
-     * @private
-     */
-    handleFilterStateChange(filterState) {
-        console.log('🔄 Filter state changed:', filterState);
-        this.applyFilterEffects(filterState);
-    }
-
-    /**
-     * Handle filter changes from FilterControls UI
-     * @param {Object} filterState - New filter state from UI
-     * @private
-     */
-    handleFilterChange(filterState) {
-        console.log('🎛️ Filter controls changed:', filterState);
-        // Update the filter state manager (which will trigger handleFilterStateChange)
-        this.filterStateManager.updateFilterState(filterState);
-    }
-
-    /**
-     * Apply filter effects based on current state
-     * @param {Object} filterState - Filter state to apply
-     * @private
-     */
-    applyFilterEffects(filterState) {
-        console.log('🎨 Applying filter effects to', this.detectedProducts.length, 'products');
-        this.visualIndicators.applyFilterEffects(filterState);
-    }
 
     /**
      * Toggle filter controls visibility
@@ -896,13 +763,15 @@ export class ContentScriptManager {
             if (this.detectedProducts.length > 0 && this.styleProfile) {
                 console.log('🎨 Displaying style scores...');
                 
-                // Get stored style analysis results (should exist from initial detection)
-                const styleResults = this.detectedProducts.map(product => 
-                    this.productAnalysisResults.get(product.element)
-                );
+                // Create array of [product, result] pairs for safe updating
+                const productResultPairs = this.detectedProducts.map((product, i) => ({
+                    product,
+                    result: this.productAnalysisResults.get(product.element),
+                    index: i
+                })).filter(pair => pair.result); // Only include products that have results
 
-                // Display existing results
-                this.updateProductScores(styleResults);
+                // Display existing results using safer pairs approach
+                this.addScoreOverlays(productResultPairs);
             } else if (!this.styleProfile) {
                 console.log('ℹ️ No style profile available');
             } else {
