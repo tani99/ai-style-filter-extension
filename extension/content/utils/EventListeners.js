@@ -120,13 +120,19 @@ export class EventListeners {
                     break;
 
                 case 'enableViewportAnalysis':
-                    this.contentScript.enableViewportAnalysis();
-                    sendResponse({status: 'viewport_analysis_enabled'});
+                    // Viewport analysis moved to separate module (ViewportAnalysis.js)
+                    sendResponse({
+                        status: 'feature_moved',
+                        message: 'Viewport analysis moved to ViewportAnalysis.js module'
+                    });
                     break;
 
                 case 'disableViewportAnalysis':
-                    this.contentScript.disableViewportAnalysis();
-                    sendResponse({status: 'viewport_analysis_disabled'});
+                    // Viewport analysis moved to separate module (ViewportAnalysis.js)
+                    sendResponse({
+                        status: 'feature_moved',
+                        message: 'Viewport analysis moved to ViewportAnalysis.js module'
+                    });
                     break;
 
                 case 'debugCache':

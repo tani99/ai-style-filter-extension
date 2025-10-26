@@ -74,8 +74,7 @@ export class ContentScriptManager {
         this.userPrompt = ''; // Current user prompt for prompt mode
 
         // Performance settings
-        this.viewportAnalysisEnabled = false; // Disabled - detect all images at once
-        this.analysisObserver = null;
+        // Viewport analysis moved to separate module (ViewportAnalysis.js)
     }
 
     /**
@@ -87,39 +86,47 @@ export class ContentScriptManager {
             return;
         }
 
+        const initStart = performance.now();
         console.log(`✅ AI Style Filter initializing on ${this.currentSite?.name || 'Unknown site'}`);
         console.log(`📄 Page Type: ${this.pageType}`);
 
         // Inject reactive filter CSS styles
+        const cssStart = performance.now();
         this.injectFilterStyles();
+        console.log(`⏱️ CSS injection took ${(performance.now() - cssStart).toFixed(2)}ms`);
 
-        // Load user's style profile
-        await this.loadStyleProfile();
-
-        // Load ranking mode and prompt
-        await this.loadRankingMode();
+        // Load user's style profile and ranking mode in parallel
+        const profileStart = performance.now();
+        const storageStart = performance.now();
+        const [profileResult, rankingResult] = await Promise.all([
+            this.loadStyleProfile(),
+            this.loadRankingMode()
+        ]);
+        console.log(`⏱️ Storage operations (profile + ranking) took ${(performance.now() - storageStart).toFixed(2)}ms`);
 
         // Initialize filter state manager
+        const filterStart = performance.now();
         await this.filterStateManager.initialize();
+        console.log(`⏱️ Filter state init took ${(performance.now() - filterStart).toFixed(2)}ms`);
         this.filterStateManager.addListener(this.handleFilterStateChange.bind(this));
 
-        // Run initial product detection
-        this.runInitialDetection();
-
-        // Set up event listeners
+        // Set up event listeners (non-blocking)
         this.setupEventListeners();
 
-        // Set up viewport analysis
-        this.setupViewportAnalysis();
+        // Viewport analysis moved to separate module (ViewportAnalysis.js)
+        // Currently unused - extension uses one-time detection instead
 
-        // Show filter controls on the page automatically
+        // Show filter controls on the page automatically (non-blocking)
         this.filterControls.showControls();
 
-        // Notify that initialization is complete
+        // Notify that initialization is complete (non-blocking)
         this.notifyBackgroundScript();
 
+        // Run initial product detection after a very short delay to ensure DOM is ready
+        this.runInitialDetection();
+
         this.isInitialized = true;
-        console.log('🎉 ContentScriptManager initialization complete');
+        console.log(`🎉 ContentScriptManager initialization complete - Total: ${(performance.now() - initStart).toFixed(2)}ms`);
     }
 
     /**
@@ -154,11 +161,15 @@ export class ContentScriptManager {
      * @private
      */
     async runInitialDetection() {
-        // Start immediately - images will be detected as they load
-        // Reduced delay from 1000ms to 300ms for faster startup
+        const delayStart = performance.now();
+        // Wait for page to settle and images to load
+        // Reduced delay significantly - most pages are ready much faster
         setTimeout(async () => {
+            console.log(`⏱️ Delay before detection: ${(performance.now() - delayStart).toFixed(2)}ms`);
+            const detectionStart = performance.now();
             await this.detectProductImages();
-        }, 300);
+            console.log(`⏱️ Image detection took ${(performance.now() - detectionStart).toFixed(2)}ms`);
+        }, 500); // Increased to 500ms to allow for lazy loading and dynamic content
     }
 
     /**
@@ -180,47 +191,8 @@ export class ContentScriptManager {
         this.eventListeners.setupMessageListeners();
     }
 
-    /**
-     * Set up viewport-based analysis with IntersectionObserver
-     * Detects images as they scroll into view
-     * @private
-     */
-    setupViewportAnalysis() {
-        if (!this.viewportAnalysisEnabled) {
-            console.log('⚠️ Viewport analysis is disabled');
-            return;
-        }
-
-        const observerOptions = {
-            root: null,
-            rootMargin: '300px', // Start analyzing 300px before image enters viewport
-            threshold: 0.01
-        };
-
-        this.analysisObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const img = entry.target;
-                    console.log('👁️ Image entered viewport:', {
-                        alt: img.alt,
-                        src: img.src.substring(0, 50),
-                        clothingItemDetected: img.dataset.clothingItemDetected,
-                        detectionInProgress: img.dataset.clothingItemDetectionInProgress
-                    });
-
-                    // Only analyze if not already checked (undefined) and not currently analyzing
-                    if (!img.dataset.clothingItemDetected && !img.dataset.clothingItemDetectionInProgress) {
-                        console.log('🔄 Triggering analysis for scrolled image');
-                        this.analyzeNewImage(img);
-                    } else {
-                        console.log('⏭️ Skipping image (already processed)');
-                    }
-                }
-            });
-        }, observerOptions);
-
-        console.log('✅ IntersectionObserver created successfully');
-    }
+    // Viewport analysis code moved to /detection/ViewportAnalysis.js
+    // This feature is currently unused - extension uses one-time detection instead
 
     /**
      * Observe all images on the page for lazy detection

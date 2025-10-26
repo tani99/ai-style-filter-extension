@@ -248,10 +248,6 @@ function calculateOptimalPosition(imageRect, viewportWidth) {
 - Smooth slide-in animation
 - Keyboard support (ESC to close)
 
-#### 5.3 Bulk Try-On Capability (Future)
-**Idea**: Select multiple items to try on in sequence
-**Implementation**: Phase 6 consideration
-
 ---
 
 ### Phase 6: Ranking Display Refinement
