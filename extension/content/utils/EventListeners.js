@@ -181,42 +181,31 @@ export class EventListeners {
                     break;
 
                 case 'applyPrompt':
-                    // Handle prompt mode activation
-                    if (request.prompt) {
-                        console.log('📩 Applying prompt from popup:', request.prompt);
-                        this.contentScript.handleApplyPrompt(request.prompt).then(() => {
-                            sendResponse({status: 'prompt_applied'});
-                        }).catch(error => {
-                            console.error('Error applying prompt:', error);
-                            sendResponse({status: 'error', message: error.message});
-                        });
-                        return true; // Keep message channel open for async response
-                    } else {
-                        sendResponse({
-                            status: 'missing_parameter',
-                            message: 'prompt parameter required'
-                        });
-                    }
+                    // Prompt mode is currently disabled
+                    sendResponse({
+                        status: 'feature_disabled',
+                        message: 'Prompt mode is currently disabled'
+                    });
                     break;
 
                 case 'switchToStyleMode':
-                    // Handle switch back to style mode
-                    console.log('📩 Switching to style mode from popup');
-                    this.contentScript.handleSwitchToStyleMode().then(() => {
-                        sendResponse({status: 'switched_to_style_mode'});
+                    // Handle showing style suggestions
+                    console.log('📩 Showing style suggestions from popup');
+                    this.contentScript.showStyleSuggestions(true).then(() => {
+                        sendResponse({status: 'style_suggestions_shown'});
                     }).catch(error => {
-                        console.error('Error switching to style mode:', error);
+                        console.error('Error showing style suggestions:', error);
                         sendResponse({status: 'error', message: error.message});
                     });
                     return true; // Keep message channel open for async response
 
                 case 'disableExtension':
-                    // Handle extension disable (turn off mode)
-                    console.log('📩 Disabling extension from popup');
-                    this.contentScript.handleDisableExtension().then(() => {
-                        sendResponse({status: 'extension_disabled'});
+                    // Handle hiding style suggestions
+                    console.log('📩 Hiding style suggestions from popup');
+                    this.contentScript.showStyleSuggestions(false).then(() => {
+                        sendResponse({status: 'style_suggestions_hidden'});
                     }).catch(error => {
-                        console.error('Error disabling extension:', error);
+                        console.error('Error hiding style suggestions:', error);
                         sendResponse({status: 'error', message: error.message});
                     });
                     return true; // Keep message channel open for async response
