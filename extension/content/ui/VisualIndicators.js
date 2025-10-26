@@ -638,7 +638,7 @@ export class VisualIndicators {
      * @param {number} index - Image index
      * @param {HTMLElement|null} eyeIcon - Eye icon element for virtual try-on
      */
-    trackOverlay(img, overlay, scoreBadge, index, eyeIcon = null) {
+    trackOverlay(img, overlay, _scoreBadge, index, eyeIcon = null) {
         const overlayData = {
             overlay,
             scoreBadge: null, // No score badges anymore
@@ -1336,7 +1336,7 @@ export class VisualIndicators {
         eyeIcons.forEach(icon => icon.remove());
 
         // Clear all event handlers
-        this.updateHandlers.forEach((handlers, img) => {
+        this.updateHandlers.forEach((handlers) => {
             if (handlers.updatePosition) {
                 window.removeEventListener('scroll', handlers.updatePosition);
                 window.removeEventListener('resize', handlers.updatePosition);
@@ -1437,7 +1437,7 @@ export class VisualIndicators {
      * CSS now handles styling via data attributes
      * @deprecated Use data attributes instead
      */
-    dimProduct(img) {
+    dimProduct(_img) {
         console.warn('⚠️ dimProduct() is deprecated - CSS handles styling automatically');
     }
 
@@ -1446,7 +1446,7 @@ export class VisualIndicators {
      * CSS now handles styling via data attributes
      * @deprecated Use data attributes instead
      */
-    highlightProduct(img) {
+    highlightProduct(_img) {
         console.warn('⚠️ highlightProduct() is deprecated - CSS handles styling automatically');
     }
 
@@ -1455,7 +1455,7 @@ export class VisualIndicators {
      * CSS now handles styling via data attributes
      * @deprecated Use data attributes instead
      */
-    setImageOpacity(img, opacity) {
+    setImageOpacity(_img, _opacity) {
         console.warn('⚠️ setImageOpacity() is deprecated - CSS handles styling automatically');
     }
 
@@ -1464,43 +1464,8 @@ export class VisualIndicators {
      * CSS now handles styling via data attributes
      * @deprecated Use data attributes instead
      */
-    setImageHighlight(img, enabled) {
+    setImageHighlight(_img, _enabled) {
         console.warn('⚠️ setImageHighlight() is deprecated - CSS handles styling automatically');
-    }
-
-    /**
-     * Find parent product card element
-     * @param {HTMLImageElement} img - Image element
-     * @returns {HTMLElement|null} Product card element
-     * @private
-     */
-    findProductCard(img) {
-        // Try to find common product card selectors
-        const selectors = [
-            '.product-card',
-            '.product-item',
-            '.product',
-            '[class*="product"]',
-            '[data-product]',
-            'article',
-            '.card'
-        ];
-
-        let element = img.parentElement;
-        let depth = 0;
-        const maxDepth = 5;
-
-        while (element && depth < maxDepth) {
-            for (const selector of selectors) {
-                if (element.matches && element.matches(selector)) {
-                    return element;
-                }
-            }
-            element = element.parentElement;
-            depth++;
-        }
-
-        return null;
     }
 
     /**
