@@ -71,6 +71,7 @@ export class VisualIndicators {
         // Set data attributes
         // clothingItemDetected: 'true' = confirmed clothing item, 'false' = not clothing, undefined = not analyzed
         img.dataset.clothingItemDetected = 'true';
+        img.dataset.aiStyleDetected = 'true'; // For StyleOverlayController to find images
         img.dataset.aiStyleIndex = index;
 
         // Add tooltip

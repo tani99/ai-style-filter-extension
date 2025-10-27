@@ -5,10 +5,13 @@ import { FILTER_DEFAULTS } from '../config/FilterDefaults.js';
  * Provides toggle switches and controls for showing/hiding style recommendations
  */
 export class StyleOverlayController {
-    constructor() {
+    constructor(contentScriptManager = null) {
         this.controlsPanel = null;
         this.isVisible = false;
         this.isCollapsed = false;
+
+        // Reference to ContentScriptManager for triggering overlay updates
+        this.contentScriptManager = contentScriptManager;
 
         // Drag state
         this.isDragging = false;
@@ -17,9 +20,18 @@ export class StyleOverlayController {
 
         // Filter state - use shared defaults as single source of truth
         this.filterState = { ...FILTER_DEFAULTS };
-        
+
         // Listen for storage changes to sync with popup
         this.setupStorageListener();
+    }
+
+    /**
+     * Set the ContentScriptManager reference
+     * @param {ContentScriptManager} manager - ContentScriptManager instance
+     */
+    setContentScriptManager(manager) {
+        this.contentScriptManager = manager;
+        console.log('✅ StyleOverlayController connected to ContentScriptManager');
     }
 
     /**
@@ -301,7 +313,7 @@ export class StyleOverlayController {
         }
 
         // Handle toggle
-        label.onclick = () => {
+        label.onclick = async () => {
             const newMode = this.filterState.mode === 'all' ? 'myStyle' : 'all';
             this.filterState.mode = newMode;
 
@@ -321,8 +333,17 @@ export class StyleOverlayController {
             });
 
             // Sync with popup state
-            this.syncWithPopupState(newMode);
-            
+            await this.syncWithPopupState(newMode);
+
+            // CRITICAL: Call showStyleSuggestions to actually render the overlays
+            if (this.contentScriptManager && this.contentScriptManager.showStyleSuggestions) {
+                const shouldShow = newMode === 'myStyle';
+                console.log(`🎛️ Calling showStyleSuggestions(${shouldShow})...`);
+                await this.contentScriptManager.showStyleSuggestions(shouldShow);
+            } else {
+                console.warn('⚠️ ContentScriptManager not available - overlays may not appear');
+            }
+
             console.log(`🎛️ Filter mode changed to: ${newMode} - data attributes updated directly`);
         };
 

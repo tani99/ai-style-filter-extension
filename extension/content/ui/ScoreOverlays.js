@@ -28,6 +28,10 @@ export class ScoreOverlays {
             imgSrc: img.src.substring(0, 60) + '...'
         });
 
+        // Ensure animation CSS is available
+        this.ensureSpinnerAnimation();
+        this.ensurePerfectMatchAnimation();
+
         // VALIDATION: Ensure score is valid (1-10 scale only)
         if (score < 1 || score > 10) {
             console.error(`❌ Invalid score ${score} (expected 1-10). Ignoring.`);
@@ -233,7 +237,6 @@ export class ScoreOverlays {
         console.log('🏷️ Score badge created:', {
             text: badgeText,
             class: badgeClass,
-            isTierSystem,
             score
         });
 
@@ -285,6 +288,9 @@ export class ScoreOverlays {
      * @param {number} index - Image index
      */
     addLoadingIndicator(img, index) {
+        // Ensure animation CSS is available
+        this.ensureSpinnerAnimation();
+
         const overlayData = this.overlayMap.get(img);
         if (!overlayData) {
             console.warn('⚠️ No overlay data found for image');

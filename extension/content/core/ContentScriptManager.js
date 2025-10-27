@@ -58,6 +58,9 @@ export class ContentScriptManager {
         this.visualIndicators = new VisualIndicators(false);
         this.styleOverlayController = new StyleOverlayController();
 
+        // Connect StyleOverlayController to this manager
+        this.styleOverlayController.setContentScriptManager(this);
+
         // Event management
         this.eventListeners = new EventListeners(this);
 
@@ -360,6 +363,12 @@ export class ContentScriptManager {
                     // Store style analysis result
                     if (styleResult) {
                         this.productAnalysisResults.set(img, styleResult);
+
+                        // ALWAYS store score in DOM attribute for reliable retrieval
+                        if (styleResult.score && styleResult.score >= 1 && styleResult.score <= 10) {
+                            img.dataset.aiStyleScore = styleResult.score;
+                            console.log(`📊 Stored score ${styleResult.score} in DOM for new product ${globalIndex + 1}`);
+                        }
                     }
 
                     // Update progress
@@ -369,7 +378,7 @@ export class ContentScriptManager {
                     console.log(`✅ [${completedCount}/${newProducts.length}] New product analyzed (score: ${styleResult?.score})`);
 
                     // ⚡ PROGRESSIVE UI UPDATE: Add score overlay immediately if UI is enabled
-                    if (this.showStyleSuggestions && styleResult && product?.element?.isConnected) {
+                    if (this.isShowingStyleSuggestions && styleResult && product?.element?.isConnected) {
                         const isFallback = styleResult.success === false ||
                                           (styleResult.method && styleResult.method.includes('fallback'));
 
@@ -382,7 +391,7 @@ export class ContentScriptManager {
                                     globalIndex,
                                     'style'
                                 );
-                                console.error(`Adding score overlay for new product ${globalIndex + 1}:`, overlayError);
+                                console.log(`✅ Added score overlay for new product ${globalIndex + 1}`);
 
                             } catch (overlayError) {
                                 console.error(`❌ Failed to add score overlay for new product ${globalIndex + 1}:`, overlayError);
@@ -458,9 +467,9 @@ export class ContentScriptManager {
         try {
             const result = await chrome.storage.local.get(['showStyleSuggestions']);
 
-            this.showStyleSuggestions = result.showStyleSuggestions || false;
+            this.isShowingStyleSuggestions = result.showStyleSuggestions || false;
 
-            console.log('🎯 Show Style Suggestions:', this.showStyleSuggestions);
+            console.log('🎯 Show Style Suggestions:', this.isShowingStyleSuggestions);
         } catch (error) {
             console.error('❌ Failed to load UI visibility setting:', error);
         }
@@ -510,6 +519,12 @@ export class ContentScriptManager {
                         // Store style analysis result
                         if (styleResult) {
                             this.productAnalysisResults.set(img, styleResult);
+
+                            // ALWAYS store score in DOM attribute for reliable retrieval
+                            if (styleResult.score && styleResult.score >= 1 && styleResult.score <= 10) {
+                                img.dataset.aiStyleScore = styleResult.score;
+                                console.log(`📊 Stored score ${styleResult.score} in DOM for product ${i + 1}`);
+                            }
                         }
 
                         // Update progress (atomic increment)
@@ -519,7 +534,7 @@ export class ContentScriptManager {
                         console.log(`✅ [${completedCount}/${detectedImages.length}] Completed analysis (score: ${styleResult?.score})`);
 
                         // ⚡ PROGRESSIVE UI UPDATE: Add score overlay immediately if UI is enabled
-                        if (this.showStyleSuggestions && styleResult && product?.element?.isConnected) {
+                        if (this.isShowingStyleSuggestions && styleResult && product?.element?.isConnected) {
                             const isFallback = styleResult.success === false ||
                                               (styleResult.method && styleResult.method.includes('fallback'));
 
@@ -532,7 +547,7 @@ export class ContentScriptManager {
                                         i,
                                         'style'
                                     );
-                                    console.error(`Adding score overlay for product ${i + 1}:`, overlayError);
+                                    console.log(`✅ Added score overlay for product ${i + 1}`);
                                 } catch (overlayError) {
                                     console.error(`❌ Failed to add score overlay for product ${i + 1}:`, overlayError);
                                 }
@@ -817,7 +832,7 @@ export class ContentScriptManager {
         console.log(`🔄 showStyleSuggestions called with show=${show}`);
 
         // Update UI visibility state
-        this.showStyleSuggestions = show;
+        this.isShowingStyleSuggestions = show;
 
         if (show) {
             // Show style scores from existing analysis
