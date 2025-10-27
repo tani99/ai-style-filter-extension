@@ -308,11 +308,6 @@ export class ContentScriptManager {
             if (this.styleProfile) {
                 console.log(`📊 Starting analysis for ${results.detectedImages.length} newly detected products...`);
 
-                // Add loading indicators to new products
-                results.detectedImages.forEach((item, localIndex) => {
-                    const globalIndex = startIndex + localIndex;
-                    this.visualIndicators.addLoadingIndicator(item.element, globalIndex);
-                });
 
                 // Analyze the new products
                 await this.analyzeNewProducts(results.detectedImages, startIndex);
@@ -377,27 +372,6 @@ export class ContentScriptManager {
 
                     console.log(`✅ [${completedCount}/${newProducts.length}] New product analyzed (score: ${styleResult?.score})`);
 
-                    // ⚡ PROGRESSIVE UI UPDATE: Add score overlay immediately if UI is enabled
-                    if (this.isShowingStyleSuggestions && styleResult && product?.element?.isConnected) {
-                        const isFallback = styleResult.success === false ||
-                                          (styleResult.method && styleResult.method.includes('fallback'));
-
-                        if (!isFallback) {
-                            try {
-                                this.visualIndicators.addScoreOverlay(
-                                    product.element,
-                                    styleResult.score,
-                                    styleResult.reasoning,
-                                    globalIndex,
-                                    'style'
-                                );
-                                console.log(`✅ Added score overlay for new product ${globalIndex + 1}`);
-
-                            } catch (overlayError) {
-                                console.error(`❌ Failed to add score overlay for new product ${globalIndex + 1}:`, overlayError);
-                            }
-                        }
-                    }
 
                     return { success: true, index: localIndex };
 
@@ -533,26 +507,6 @@ export class ContentScriptManager {
 
                         console.log(`✅ [${completedCount}/${detectedImages.length}] Completed analysis (score: ${styleResult?.score})`);
 
-                        // ⚡ PROGRESSIVE UI UPDATE: Add score overlay immediately if UI is enabled
-                        if (this.isShowingStyleSuggestions && styleResult && product?.element?.isConnected) {
-                            const isFallback = styleResult.success === false ||
-                                              (styleResult.method && styleResult.method.includes('fallback'));
-
-                            if (!isFallback) {
-                                try {
-                                    this.visualIndicators.addScoreOverlay(
-                                        product.element,
-                                        styleResult.score,
-                                        styleResult.reasoning,
-                                        i,
-                                        'style'
-                                    );
-                                    console.log(`✅ Added score overlay for product ${i + 1}`);
-                                } catch (overlayError) {
-                                    console.error(`❌ Failed to add score overlay for product ${i + 1}:`, overlayError);
-                                }
-                            }
-                        }
 
                     } else {
                         // WITHOUT style profile: Just generate outfit description
@@ -613,70 +567,6 @@ export class ContentScriptManager {
         }
     }
 
-    /**
-     * Add score overlays to product images (safer version with pairs)
-     * @param {Array<Object>} productResultPairs - Array of {product, result, index} objects
-     * @private
-     */
-    addScoreOverlays(productResultPairs) {
-        console.log('🎨 addScoreOverlays called with', productResultPairs.length, 'pairs');
-
-        productResultPairs.forEach(({product, result, index}) => {
-            console.log(`   Product ${index + 1}:`, {
-                hasProduct: !!product,
-                hasElement: !!product?.element,
-                isConnected: !!product?.element?.isConnected,
-                score: result?.score,
-                reasoning: result?.reasoning
-            });
-
-            if (!result) {
-                console.warn(`   ⚠️ No result for product at index ${index}`);
-                return;
-            }
-
-            if (!product || !product.element) {
-                console.warn(`   ⚠️ Cannot add score overlay - missing product or element at index ${index}`);
-                return;
-            }
-
-            // SAFETY CHECK: Verify element is still in DOM before adding overlay
-            if (!product.element.isConnected) {
-                console.warn(`   ⚠️ Product ${index + 1} element is no longer in DOM - skipping score overlay`);
-                return;
-            }
-
-            // Only show badge if analysis was successful (not a fallback)
-            const isFallback = result.success === false ||
-                              (result.method && result.method.includes('fallback'));
-
-            if (isFallback) {
-                console.log(`   ⚠️ Product ${index + 1} returned fallback result - keeping loading indicator`);
-                // Keep the loading indicator, don't replace it with a fallback badge
-            } else {
-                console.log(`   ✏️ Calling addScoreOverlay for product ${index + 1}:`, {
-                    score: result.score,
-                    scoreType: typeof result.score,
-                    reasoning: result.reasoning?.substring(0, 50),
-                    imgAlt: product.element.alt
-                });
-                // Add score overlay to product
-                try {
-                    this.visualIndicators.addScoreOverlay(
-                        product.element,
-                        result.score,
-                        result.reasoning,
-                        index,
-                        'style'
-                    );
-                } catch (error) {
-                    console.error(`   ❌ Failed to add score overlay for product ${index + 1}:`, error);
-                }
-            }
-        });
-
-        console.log('✅ Product score overlays added');
-    }
 
     /**
      * Clear all product analysis data
@@ -846,8 +736,6 @@ export class ContentScriptManager {
                     index: i
                 })).filter(pair => pair.result); // Only include products that have results
 
-                // Display existing results using safer pairs approach
-                this.addScoreOverlays(productResultPairs);
             } else if (!this.styleProfile) {
                 console.log('ℹ️ No style profile available');
             } else {

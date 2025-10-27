@@ -1,5 +1,4 @@
 import { GeometryUtils } from '../utils/GeometryUtils.js';
-import { ScoreOverlays } from './ScoreOverlays.js';
 import { TryOnOverlays } from './TryOnOverlays.js';
 
 /**
@@ -14,7 +13,6 @@ export class VisualIndicators {
         this.globalUpdaterSetup = false; // Flag to ensure global updater is setup only once
 
         // Initialize specialized overlay managers
-        this.scoreOverlays = new ScoreOverlays(this.overlayMap, this.updateHandlers);
         this.tryOnOverlays = new TryOnOverlays(this.overlayMap, this.updateHandlers);
     }
 
@@ -82,7 +80,7 @@ export class VisualIndicators {
         document.body.appendChild(eyeIcon);
 
         // Store references and setup position updates
-        this.trackOverlay(img, overlay, null, index, eyeIcon);
+        this.trackOverlay(img, overlay, index, eyeIcon);
         this.setupPositionUpdates(img, overlay, eyeIcon);
 
         // Position overlays after ensuring image is loaded
@@ -114,7 +112,7 @@ export class VisualIndicators {
         document.body.appendChild(overlay);
 
         // Store references and setup position updates
-        this.trackOverlay(img, overlay, null, index);
+        this.trackOverlay(img, overlay, index);
         this.setupPositionUpdates(img, overlay);
 
         // Position overlay after ensuring image is loaded
@@ -218,14 +216,11 @@ export class VisualIndicators {
      * Track overlay elements for cleanup and updates
      * @param {HTMLImageElement} img - Image element
      * @param {HTMLElement} overlay - Main overlay element
-     * @param {HTMLElement|null} scoreBadge - Score badge element (unused, kept for compatibility)
-     * @param {number} index - Image index
      * @param {HTMLElement|null} eyeIcon - Eye icon element for virtual try-on
      */
-    trackOverlay(img, overlay, _scoreBadge, index, eyeIcon = null) {
+    trackOverlay(img, overlay, index, eyeIcon = null) {
         const overlayData = {
             overlay,
-            scoreBadge: null, // No score badges anymore
             eyeIcon,
             index,
             img
@@ -291,34 +286,6 @@ export class VisualIndicators {
         console.log('✅ Global position updater setup complete');
     }
 
-    /**
-     * Add score overlay to a detected product image
-     * Shows compatibility score (1-10) with visual styling
-     * @param {HTMLImageElement} img - Image element
-     * @param {number} score - Compatibility score (1-10)
-     * @param {string} reasoning - Analysis reasoning
-     * @param {number} index - Image index
-     * @param {string} mode - Ranking mode (unused, kept for compatibility)
-     */
-    addScoreOverlay(img, score, reasoning, index, mode = null) {
-        return this.scoreOverlays.addScoreOverlay(img, score, reasoning, index, mode);
-    }
-
-    /**
-     * Replace all score badges with loading indicators
-     */
-    replaceScoresWithLoadingIndicators() {
-        return this.scoreOverlays.replaceScoresWithLoadingIndicators();
-    }
-
-    /**
-     * Add loading indicator to an image
-     * @param {HTMLImageElement} img - Image element
-     * @param {number} index - Image index
-     */
-    addLoadingIndicator(img, index) {
-        return this.scoreOverlays.addLoadingIndicator(img, index);
-    }
 
     /**
      * Remove visual indicators for a specific image
@@ -332,10 +299,6 @@ export class VisualIndicators {
                 overlayData.overlay.remove();
             }
 
-            // Remove score badge if exists
-            if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
-                overlayData.scoreBadge.remove();
-            }
 
             // Remove eye icon if exists
             if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
@@ -362,9 +325,6 @@ export class VisualIndicators {
         this.overlayMap.forEach((overlayData, img) => {
             if (overlayData.overlay && overlayData.overlay.parentNode) {
                 overlayData.overlay.remove();
-            }
-            if (overlayData.scoreBadge && overlayData.scoreBadge.parentNode) {
-                overlayData.scoreBadge.remove();
             }
             if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
                 overlayData.eyeIcon.remove();
