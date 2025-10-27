@@ -1,5 +1,3 @@
-import { FILTER_DEFAULTS } from '../config/FilterDefaults.js';
-
 /**
  * StyleOverlayController manages the UI for style overlay controls
  * Provides toggle switches and controls for showing/hiding style recommendations
@@ -17,12 +15,6 @@ export class StyleOverlayController {
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         this.currentPosition = { x: window.innerWidth - 320, y: 80 }; // Default position (top-right)
-
-        // Filter state - use shared defaults as single source of truth
-        this.filterState = { ...FILTER_DEFAULTS };
-
-        // Listen for storage changes to sync with popup
-        this.setupStorageListener();
     }
 
     /**
@@ -240,10 +232,6 @@ export class StyleOverlayController {
             transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
         `;
 
-        // Add mode toggle section
-        const modeSection = this.modeToggle();
-        content.appendChild(modeSection);
-
         // Add category filters section
         const categorySection = this.categoryFilters();
         content.appendChild(categorySection);
@@ -251,108 +239,6 @@ export class StyleOverlayController {
         return content;
     }
 
-    /**
-     * Create mode toggle switch (All Items vs My Style)
-     * @returns {HTMLElement} Mode toggle section
-     */
-    modeToggle() {
-        const section = document.createElement('div');
-        section.style.cssText = `
-            margin-bottom: 24px;
-        `;
-
-        const label = document.createElement('label');
-        label.style.cssText = `
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            user-select: none;
-        `;
-
-        const labelText = document.createElement('span');
-        labelText.textContent = 'My Style Mode';
-        labelText.style.cssText = `
-            font-size: 14px;
-            font-weight: 500;
-        `;
-
-        // Toggle switch
-        const toggleContainer = document.createElement('div');
-        toggleContainer.style.cssText = `
-            position: relative;
-            width: 52px;
-            height: 28px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 14px;
-            transition: background 0.3s;
-        `;
-
-        const toggleKnob = document.createElement('div');
-        toggleKnob.style.cssText = `
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 22px;
-            height: 22px;
-            background: white;
-            border-radius: 50%;
-            transition: transform 0.3s;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        `;
-
-        toggleContainer.appendChild(toggleKnob);
-
-        // Initialize toggle state based on current filter state
-        if (this.filterState.mode === 'myStyle') {
-            toggleContainer.style.background = '#10b981';
-            toggleKnob.style.transform = 'translateX(24px)';
-        } else {
-            toggleContainer.style.background = 'rgba(255, 255, 255, 0.3)';
-            toggleKnob.style.transform = 'translateX(0)';
-        }
-
-        // Handle toggle
-        label.onclick = async () => {
-            const newMode = this.filterState.mode === 'all' ? 'myStyle' : 'all';
-            this.filterState.mode = newMode;
-
-            // Update UI visuals
-            if (newMode === 'myStyle') {
-                toggleContainer.style.background = '#10b981';
-                toggleKnob.style.transform = 'translateX(24px)';
-            } else {
-                toggleContainer.style.background = 'rgba(255, 255, 255, 0.3)';
-                toggleKnob.style.transform = 'translateX(0)';
-            }
-
-            // DIRECTLY set data attributes on all detected images
-            document.querySelectorAll('img[data-ai-style-detected="true"]').forEach(img => {
-                img.dataset.aiFilterMode = newMode;
-                img.dataset.aiScoreThreshold = '7'; // Fixed threshold
-            });
-
-            // Sync with popup state
-            await this.syncWithPopupState(newMode);
-
-            // CRITICAL: Call showStyleSuggestions to actually render the overlays
-            if (this.contentScriptManager && this.contentScriptManager.showStyleSuggestions) {
-                const shouldShow = newMode === 'myStyle';
-                console.log(`🎛️ Calling showStyleSuggestions(${shouldShow})...`);
-                await this.contentScriptManager.showStyleSuggestions(shouldShow);
-            } else {
-                console.warn('⚠️ ContentScriptManager not available - overlays may not appear');
-            }
-
-            console.log(`🎛️ Filter mode changed to: ${newMode} - data attributes updated directly`);
-        };
-
-        label.appendChild(labelText);
-        label.appendChild(toggleContainer);
-        section.appendChild(label);
-
-        return section;
-    }
 
     /**
      * Create score threshold slider - REMOVED
@@ -620,106 +506,7 @@ export class StyleOverlayController {
         }
     }
 
-    /**
-     * Get current filter state
-     * @returns {Object} Current filter state
-     */
-    getFilterState() {
-        return { ...this.filterState };
-    }
 
-    /**
-     * Set filter state programmatically
-     * @param {Object} state - New filter state
-     */
-    setFilterState(state) {
-        this.filterState = { ...this.filterState, ...state };
-        this.updateControlsUI();
-        // Trigger filter change by updating data attributes directly
-        document.querySelectorAll('img[data-ai-style-detected="true"]').forEach(img => {
-            img.dataset.aiFilterMode = this.filterState.mode;
-            img.dataset.aiScoreThreshold = this.filterState.scoreThreshold || '7';
-        });
-    }
-
-    /**
-     * Update controls UI to match current state
-     * @private
-     */
-    updateControlsUI() {
-        if (!this.controlsPanel) return;
-
-        console.log('🔄 Updating controls UI to match state:', this.filterState);
-
-        // Update mode toggle
-        const toggleContainer = this.controlsPanel.querySelector('div[style*="width: 52px"]');
-        const toggleKnob = toggleContainer?.querySelector('div');
-        if (toggleContainer && toggleKnob) {
-            if (this.filterState.mode === 'myStyle') {
-                toggleContainer.style.background = '#10b981';
-                toggleKnob.style.transform = 'translateX(24px)';
-            } else {
-                toggleContainer.style.background = 'rgba(255, 255, 255, 0.3)';
-                toggleKnob.style.transform = 'translateX(0)';
-            }
-        }
-
-        // Score threshold slider removed - now automatic based on scoring rules
-
-        console.log('✅ Controls UI updated');
-    }
-
-    /**
-     * Setup storage listener to sync with popup changes
-     * @private
-     */
-    setupStorageListener() {
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace === 'local' && changes.filterState) {
-                console.log('🔄 FilterControls: Storage changed, syncing state');
-                const newFilterState = changes.filterState.newValue;
-                if (newFilterState && newFilterState.mode !== this.filterState.mode) {
-                    this.filterState.mode = newFilterState.mode;
-                    this.updateControlsUI();
-                    // Update data attributes directly when storage changes
-                    document.querySelectorAll('img[data-ai-style-detected="true"]').forEach(img => {
-                        img.dataset.aiFilterMode = this.filterState.mode;
-                        img.dataset.aiScoreThreshold = this.filterState.scoreThreshold || '7';
-                    });
-                }
-            }
-        });
-    }
-
-    /**
-     * Sync filter controls state with popup state
-     * @param {string} mode - New mode ('all' or 'myStyle')
-     * @private
-     */
-    async syncWithPopupState(mode) {
-        try {
-            // Update the filterState in storage
-            await chrome.storage.local.set({
-                filterState: {
-                    mode: mode,
-                    scoreThreshold: 7
-                }
-            });
-
-            // Also update the ranking mode and extension state to match
-            const rankingMode = mode === 'myStyle' ? 'style' : 'off';
-            const extensionEnabled = mode === 'myStyle';
-            
-            await chrome.storage.local.set({
-                rankingMode: rankingMode,
-                extensionEnabled: extensionEnabled
-            });
-
-            console.log('🔄 FilterControls: Synced with popup state', { mode, rankingMode, extensionEnabled });
-        } catch (error) {
-            console.error('❌ Error syncing with popup state:', error);
-        }
-    }
 }
 
 // Expose on window for debugging

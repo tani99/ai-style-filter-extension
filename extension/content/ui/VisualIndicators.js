@@ -381,50 +381,6 @@ export class VisualIndicators {
         };
     }
 
-    /**
-     * Apply filter effects to overlays based on filter state
-     * @param {Object} filterState - Current filter state
-     */
-    applyFilterEffects(filterState) {
-        const { mode, threshold } = filterState;
-
-        this.overlayMap.forEach((overlayData, img) => {
-            // Update data attributes for CSS-based filtering
-            img.dataset.aiFilterMode = mode;
-            img.dataset.aiScoreThreshold = threshold.toString();
-
-            // Special handling for perfect matches in myStyle mode
-            if (overlayData.score >= 9 && mode === 'myStyle') {
-                overlayData.overlay.dataset.aiHighlighted = 'true';
-            } else {
-                overlayData.overlay.dataset.aiHighlighted = 'false';
-            }
-        });
-
-        console.log('✅ Filter data attributes updated - CSS is now handling visual effects');
-    }
-
-    /**
-     * Clear all filter effects
-     */
-    clearFilterEffects() {
-        this.overlayMap.forEach((overlayData, img) => {
-            // Reset all filter-related data attributes
-            delete img.dataset.aiFilterMode;
-            delete img.dataset.aiScoreThreshold;
-            delete img.dataset.aiScore;
-            delete overlayData.overlay.dataset.aiHighlighted;
-            
-            // Reset visual styling
-            img.style.opacity = '';
-            img.style.filter = '';
-            img.style.display = '';
-            img.style.border = '';
-            img.style.boxShadow = '';
-        });
-
-        console.log('✅ Filter effects cleared via data attributes');
-    }
 
     /**
      * Clear all indicators and reset state

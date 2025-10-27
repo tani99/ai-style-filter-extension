@@ -167,17 +167,11 @@ export class EventListeners {
                     break;
 
                 case 'updateFilterState':
-                    // Handle filter state updates from popup
-                    if (request.filterState) {
-                        console.log('📩 Received filter state from popup:', request.filterState);
-                        this.contentScript.filterStateManager.updateFilterState(request.filterState);
-                        sendResponse({status: 'filter_state_updated'});
-                    } else {
-                        sendResponse({
-                            status: 'missing_parameter',
-                            message: 'filterState parameter required'
-                        });
-                    }
+                    // Handle other requests
+                    sendResponse({
+                        status: 'unknown_request',
+                        message: 'Unknown request type'
+                    });
                     break;
 
                 case 'applyPrompt':

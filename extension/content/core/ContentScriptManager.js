@@ -21,7 +21,6 @@ import { StyleOverlayController } from '../ui/StyleOverlayController.js';
 // Utility modules
 import { EventListeners } from '../utils/EventListeners.js';
 import { DOMUtils } from '../utils/DOMUtils.js';
-import { FilterStateManager } from '../utils/FilterStateManager.js';
 
 /**
  * ContentScriptManager is the main orchestrating class that coordinates
@@ -53,8 +52,7 @@ export class ContentScriptManager {
         this.globalProgressIndicator = new GlobalProgressIndicator();
         this.debugInterface = new DebugInterface();
 
-        // Filter components
-        this.filterStateManager = new FilterStateManager();
+        // Visual indicators
         this.visualIndicators = new VisualIndicators(false);
         this.styleOverlayController = new StyleOverlayController();
 
@@ -105,11 +103,6 @@ export class ContentScriptManager {
             this.loadUIVisibility()
         ]);
         console.log(`⏱️ Storage operations (profile + ranking) took ${(performance.now() - storageStart).toFixed(2)}ms`);
-
-        // Initialize filter state manager
-        const filterStart = performance.now();
-        await this.filterStateManager.initialize();
-        console.log(`⏱️ Filter state init took ${(performance.now() - filterStart).toFixed(2)}ms`);
 
         // Set up event listeners (non-blocking)
         this.setupEventListeners();
@@ -675,9 +668,6 @@ export class ContentScriptManager {
      */
     showStyleOverlayControls() {
         this.styleOverlayController.showControls();
-        // Sync StyleOverlayController UI with FilterStateManager state
-        const currentState = this.filterStateManager.getFilterState();
-        this.styleOverlayController.setFilterState(currentState);
     }
 
     /**
@@ -687,13 +677,6 @@ export class ContentScriptManager {
         this.styleOverlayController.hideControls();
     }
 
-    /**
-     * Get current filter state
-     * @returns {Object} Current filter state
-     */
-    getFilterState() {
-        return this.filterStateManager.getFilterState();
-    }
 
     /**
      * Notify background script of initialization

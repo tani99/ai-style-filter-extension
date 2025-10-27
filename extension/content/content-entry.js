@@ -34,7 +34,6 @@ import { VirtualTryOnUI } from './ui/VirtualTryOnUI.js';
 import { DOMUtils } from './utils/DOMUtils.js';
 import { GeometryUtils } from './utils/GeometryUtils.js';
 import { EventListeners } from './utils/EventListeners.js';
-import { FilterStateManager } from './utils/FilterStateManager.js';
 import { PositionCalculator } from './utils/PositionCalculator.js';
 
 // Export to window for compatibility
@@ -60,7 +59,6 @@ window.VirtualTryOnUI = VirtualTryOnUI;
 window.DOMUtils = DOMUtils;
 window.GeometryUtils = GeometryUtils;
 window.EventListeners = EventListeners;
-window.FilterStateManager = FilterStateManager;
 window.PositionCalculator = PositionCalculator;
 
 // Initialize the content script
