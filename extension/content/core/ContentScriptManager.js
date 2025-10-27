@@ -16,7 +16,8 @@ import { LoadingAnimations } from '../ui/LoadingAnimations.js';
 import { GlobalProgressIndicator } from '../ui/GlobalProgressIndicator.js';
 import { VisualIndicators } from '../ui/VisualIndicators.js';
 import { DebugInterface } from '../ui/DebugInterface.js';
-import { StyleOverlayController } from '../ui/StyleOverlayController.js';
+import { ScoreBadgeManager } from '../ui/ScoreBadgeManager.js';
+import { StyleToggleController } from '../ui/StyleToggleController.js';
 
 // Utility modules
 import { EventListeners } from '../utils/EventListeners.js';
@@ -54,10 +55,10 @@ export class ContentScriptManager {
 
         // Visual indicators
         this.visualIndicators = new VisualIndicators(false);
-        this.styleOverlayController = new StyleOverlayController();
 
-        // Connect StyleOverlayController to this manager
-        this.styleOverlayController.setContentScriptManager(this);
+        // NEW: Simplified badge and toggle components
+        this.scoreBadgeManager = new ScoreBadgeManager();
+        this.styleToggleController = new StyleToggleController(this);
 
         // Event management
         this.eventListeners = new EventListeners(this);
@@ -72,6 +73,7 @@ export class ContentScriptManager {
 
         // UI visibility state
         this.isShowingStyleSuggestions = false; // true = show UI suggestions, false = hide UI
+        this.isStyleModeOn = false; // NEW: Simple toggle for score badges and visual effects
 
         // Performance settings
         // Viewport analysis moved to separate module (ViewportAnalysis.js)
@@ -96,13 +98,13 @@ export class ContentScriptManager {
         console.log(`⏱️ CSS injection took ${(performance.now() - cssStart).toFixed(2)}ms`);
 
         // Load user's style profile and UI visibility setting in parallel
-        const profileStart = performance.now();
         const storageStart = performance.now();
-        const [profileResult, uiVisibilityResult] = await Promise.all([
+        await Promise.all([
             this.loadStyleProfile(),
-            this.loadUIVisibility()
+            this.loadUIVisibility(),
+            this.loadToggleState() // NEW: Load toggle state for score badges
         ]);
-        console.log(`⏱️ Storage operations (profile + ranking) took ${(performance.now() - storageStart).toFixed(2)}ms`);
+        console.log(`⏱️ Storage operations (profile + visibility + toggle) took ${(performance.now() - storageStart).toFixed(2)}ms`);
 
         // Set up event listeners (non-blocking)
         this.setupEventListeners();
@@ -110,8 +112,8 @@ export class ContentScriptManager {
         // Viewport analysis moved to separate module (ViewportAnalysis.js)
         // Currently unused - extension uses one-time detection instead
 
-        // Show style overlay controls on the page automatically (non-blocking)
-        this.styleOverlayController.showControls();
+        // Show style toggle controls on the page automatically (non-blocking)
+        this.styleToggleController.showControls();
 
         // Notify that initialization is complete (non-blocking)
         this.notifyBackgroundScript();
@@ -443,6 +445,24 @@ export class ContentScriptManager {
     }
 
     /**
+     * Load toggle state for score badges from storage
+     * @private
+     */
+    async loadToggleState() {
+        try {
+            const result = await chrome.storage.local.get(['styleToggleOn']);
+            this.isStyleModeOn = result.styleToggleOn || false;
+
+            // Sync with badge manager
+            this.scoreBadgeManager.isVisible = this.isStyleModeOn;
+
+            console.log('✅ Style mode loaded:', this.isStyleModeOn ? 'ON' : 'OFF');
+        } catch (error) {
+            console.error('❌ Failed to load toggle state:', error);
+        }
+    }
+
+    /**
      * Combined analysis: Generate descriptions (and optionally style scores) for each image
      * Uses the same concurrent processing logic regardless of whether style profile exists
      * @param {Array<Object>} detectedImages - Array of detected product objects
@@ -491,6 +511,15 @@ export class ContentScriptManager {
                             if (styleResult.score && styleResult.score >= 1 && styleResult.score <= 10) {
                                 img.dataset.aiStyleScore = styleResult.score;
                                 console.log(`📊 Stored score ${styleResult.score} in DOM for product ${i + 1}`);
+
+                                // NEW: Progressive badge rendering
+                                // STEP 1: Store score in DOM (always)
+                                this.scoreBadgeManager.storeScore(img, styleResult.score, styleResult.reasoning);
+
+                                // STEP 2: Render badge immediately if toggle is ON (progressive)
+                                if (this.isStyleModeOn) {
+                                    this.scoreBadgeManager.renderBadge(img, styleResult.score, styleResult.reasoning);
+                                }
                             }
                         }
 
@@ -660,21 +689,21 @@ export class ContentScriptManager {
      * Toggle style overlay controls visibility
      */
     toggleStyleOverlayControls() {
-        this.styleOverlayController.toggleControls();
+        this.styleToggleController.toggleControls();
     }
 
     /**
      * Show style overlay controls
      */
     showStyleOverlayControls() {
-        this.styleOverlayController.showControls();
+        this.styleToggleController.showControls();
     }
 
     /**
      * Hide style overlay controls
      */
     hideStyleOverlayControls() {
-        this.styleOverlayController.hideControls();
+        this.styleToggleController.hideControls();
     }
 
 
@@ -695,6 +724,26 @@ export class ContentScriptManager {
         }
     }
 
+
+    /**
+     * Set style mode toggle state (called by StyleToggleController)
+     * @param {boolean} isOn - true = show badges, false = hide badges
+     */
+    async setStyleModeToggle(isOn) {
+        console.log(`🔄 Setting style mode: ${isOn ? 'ON' : 'OFF'}`);
+
+        this.isStyleModeOn = isOn;
+
+        if (isOn) {
+            // Toggle ON: Show all badges for images with scores
+            this.scoreBadgeManager.showAllBadges();
+        } else {
+            // Toggle OFF: Hide all badges and clear effects
+            this.scoreBadgeManager.hideAllBadges();
+        }
+
+        console.log(`✅ Style mode ${isOn ? 'enabled' : 'disabled'}`);
+    }
 
     /**
      * Show or hide style suggestion UI elements
