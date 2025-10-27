@@ -307,6 +307,9 @@ export class EventListeners {
             if (hasNewImages) {
                 console.log('🖼️ New images detected, checking for new products...');
                 setTimeout(async () => {
+                    // KEEP: Image detection (adds green borders)
+                    // REMOVED: Analysis trigger - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
+                    // TODO: New analysis queue will handle lazy-loaded images
                     await this.contentScript.detectNewImages();
                 }, 500);
             }
@@ -332,6 +335,9 @@ export class EventListeners {
                 if (hasNewVisibleImages) {
                     console.log('👁️ New images scrolled into view, checking for products...');
                     setTimeout(async () => {
+                        // KEEP: Image detection (adds green borders)
+                        // REMOVED: Analysis trigger - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
+                        // TODO: New analysis queue will handle viewport images
                         await this.contentScript.detectNewImages();
                     }, 1000);
                 }

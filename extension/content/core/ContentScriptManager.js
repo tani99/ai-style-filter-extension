@@ -262,9 +262,9 @@ export class ContentScriptManager {
                     `Found ${results.detectedImages.length} clothing items`
                 );
 
-                // Process each image: generates descriptions (and scores if style profile exists)
-                // Uses unified concurrent logic regardless of whether style profile exists
-                await this.analyzeCombined(results.detectedImages);
+                // REMOVED: Old analysis trigger - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
+                // await this.analyzeCombined(results.detectedImages);
+                // TODO: New lazy-loading analysis system will be implemented here
             }
 
             return results;
@@ -299,102 +299,19 @@ export class ContentScriptManager {
             // Add to detected products list
             this.detectedProducts.push(...results.detectedImages);
 
-            // If we have a style profile, analyze these new products too
-            if (this.styleProfile) {
-                console.log(`📊 Starting analysis for ${results.detectedImages.length} newly detected products...`);
-
-
-                // Analyze the new products
-                await this.analyzeNewProducts(results.detectedImages, startIndex);
-            }
+            // REMOVED: Analysis trigger for lazy-loaded images - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
+            // if (this.styleProfile) {
+            //     await this.analyzeNewProducts(results.detectedImages, startIndex);
+            // }
+            // TODO: New analysis queue will handle lazy-loaded images
         }
 
         return results;
     }
 
-    /**
-     * Analyze newly detected products (from lazy loading)
-     * Always runs style analysis in background, shows UI based on mode
-     * @param {Array<Object>} newProducts - Array of newly detected product objects
-     * @param {number} startIndex - Starting index for these products in the overall list
-     * @private
-     */
-    async analyzeNewProducts(newProducts, startIndex) {
-        console.log(`🔍 Analyzing ${newProducts.length} new products starting at index ${startIndex}...`);
-
-        if (!this.styleProfile) {
-            console.log('ℹ️ No style profile - skipping analysis');
-            return;
-        }
-
-        // Show global progress indicator for new products
-        this.globalProgressIndicator.show(newProducts.length, 'Analyzing new products');
-
-        try {
-            await this.personalStyleMatcher.initialize();
-
-            // Track completion count for progress updates
-            let completedCount = 0;
-
-            // Process ALL new products concurrently - same pattern as analyzeCombined
-            const analysisPromises = newProducts.map(async (product, localIndex) => {
-                const img = product.element;
-                const globalIndex = startIndex + localIndex;
-
-                try {
-                    // Analyze product with style profile
-                    const styleResult = await this.personalStyleMatcher.analyzeProduct(img, this.styleProfile);
-
-                    // Extract and store description
-                    if (styleResult && styleResult.description) {
-                        img.dataset.aiOutfitDescription = styleResult.description;
-                    }
-
-                    // Store style analysis result
-                    if (styleResult) {
-                        this.productAnalysisResults.set(img, styleResult);
-
-                        // ALWAYS store score in DOM attribute for reliable retrieval
-                        if (styleResult.score && styleResult.score >= 1 && styleResult.score <= 10) {
-                            img.dataset.aiStyleScore = styleResult.score;
-                            console.log(`📊 Stored score ${styleResult.score} in DOM for new product ${globalIndex + 1}`);
-                        }
-                    }
-
-                    // Update progress
-                    completedCount++;
-                    this.globalProgressIndicator.updateProgress(completedCount);
-
-                    console.log(`✅ [${completedCount}/${newProducts.length}] New product analyzed (score: ${styleResult?.score})`);
-
-
-                    return { success: true, index: localIndex };
-
-                } catch (error) {
-                    console.error(`❌ Error analyzing new product ${globalIndex + 1}:`, error);
-                    completedCount++;
-                    this.globalProgressIndicator.updateProgress(completedCount);
-                    return { success: false, index: localIndex, error };
-                }
-            });
-
-            // Wait for all analyses to complete
-            console.log(`🚀 Started ${analysisPromises.length} concurrent analysis requests for new products...`);
-            await Promise.all(analysisPromises);
-
-            console.log(`✅ Background style analysis complete for ${newProducts.length} new products`);
-
-            // ⚡ Score overlays are now added progressively during analysis
-            // No batch UI update needed here - overlays appear as soon as each analysis completes
-
-            // Hide progress indicator
-            this.globalProgressIndicator.hide();
-
-        } catch (error) {
-            console.error('❌ Failed to analyze new products:', error);
-            this.globalProgressIndicator.hide();
-        }
-    }
+    // REMOVED: analyzeNewProducts method - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
+    // This method also used Promise.all() for concurrent analysis without rate limiting
+    // TODO: Will be replaced with queue-based analysis system in Phase 2
 
     /**
      * Callback for clothing image analysis (used by ImageDetector)
@@ -462,132 +379,9 @@ export class ContentScriptManager {
         }
     }
 
-    /**
-     * Combined analysis: Generate descriptions (and optionally style scores) for each image
-     * Uses the same concurrent processing logic regardless of whether style profile exists
-     * @param {Array<Object>} detectedImages - Array of detected product objects
-     * @returns {Promise<void>}
-     * @private
-     */
-    async analyzeCombined(detectedImages) {
-        console.log('🔍 Starting combined analysis for', detectedImages.length, 'products...');
-
-        if (detectedImages.length === 0) {
-            return;
-        }
-
-        const productImages = detectedImages.map(product => product.element);
-        const hasStyleProfile = !!this.styleProfile;
-
-        // Show global progress indicator
-        const progressMessage = hasStyleProfile ? 'Analyzing products' : 'Generating descriptions';
-        this.globalProgressIndicator.show(detectedImages.length, progressMessage);
-
-        try {
-            await this.personalStyleMatcher.initialize();
-
-            // Track completion count for progress updates
-            let completedCount = 0;
-
-            // Process ALL images concurrently - start all requests at once
-            const analysisPromises = detectedImages.map(async (product, i) => {
-                const img = product.element;
-
-                try {
-                    if (hasStyleProfile) {
-                        // WITH style profile: Single AI call that returns both description and style score
-                        const styleResult = await this.personalStyleMatcher.analyzeProduct(img, this.styleProfile);
-
-                        // Extract and store description from the combined result
-                        if (styleResult && styleResult.description) {
-                            img.dataset.aiOutfitDescription = styleResult.description;
-                        }
-
-                        // Store style analysis result
-                        if (styleResult) {
-                            this.productAnalysisResults.set(img, styleResult);
-
-                            // ALWAYS store score in DOM attribute for reliable retrieval
-                            if (styleResult.score && styleResult.score >= 1 && styleResult.score <= 10) {
-                                img.dataset.aiStyleScore = styleResult.score;
-                                console.log(`📊 Stored score ${styleResult.score} in DOM for product ${i + 1}`);
-
-                                // NEW: Progressive badge rendering
-                                // STEP 1: Store score in DOM (always)
-                                this.scoreBadgeManager.storeScore(img, styleResult.score, styleResult.reasoning);
-
-                                // STEP 2: Render badge immediately if toggle is ON (progressive)
-                                if (this.isStyleModeOn) {
-                                    this.scoreBadgeManager.renderBadge(img, styleResult.score, styleResult.reasoning);
-                                }
-                            }
-                        }
-
-                        // Update progress (atomic increment)
-                        completedCount++;
-                        this.globalProgressIndicator.updateProgress(completedCount);
-
-                        console.log(`✅ [${completedCount}/${detectedImages.length}] Completed analysis (score: ${styleResult?.score})`);
-
-
-                    } else {
-                        // WITHOUT style profile: Just generate outfit description
-                        const description = await this.personalStyleMatcher.generateOutfitDescription(img);
-
-                        // Store description
-                        if (description) {
-                            img.dataset.aiOutfitDescription = description;
-                        }
-
-                        // Update progress (atomic increment)
-                        completedCount++;
-                        this.globalProgressIndicator.updateProgress(completedCount);
-
-                        console.log(`✅ [${completedCount}/${detectedImages.length}] Generated description`);
-                    }
-
-                    return { success: true, index: i };
-
-                } catch (error) {
-                    console.error(`❌ Error analyzing product ${i + 1}:`, error);
-                    completedCount++;
-                    this.globalProgressIndicator.updateProgress(completedCount);
-                    return { success: false, index: i, error };
-                }
-            });
-
-            // Wait for all analyses to complete
-            console.log(`🚀 Started ${analysisPromises.length} concurrent analysis requests...`);
-            await Promise.all(analysisPromises);
-
-            console.log(`✅ Combined analysis complete for ${detectedImages.length} products`);
-
-            // ⚡ Score overlays are now added progressively during analysis (see lines 472-490)
-            // No batch UI update needed here - overlays appear as soon as each analysis completes
-
-            // Hide progress indicator
-            this.globalProgressIndicator.hide();
-
-            // Show permanent success message
-            if (hasStyleProfile) {
-                const analyzedCount = productImages.filter(img => this.productAnalysisResults.has(img)).length;
-                const totalCount = productImages.length;
-                this.loadingAnimations.showSuccessMessage(
-                    `Analysis complete! ${analyzedCount}/${totalCount} images analyzed`,
-                    null
-                );
-            } else {
-                this.loadingAnimations.showSuccessMessage(
-                    `Descriptions generated for ${detectedImages.length} products`,
-                    null
-                );
-            }
-
-        } catch (error) {
-            console.error('❌ Combined analysis failed:', error);
-            this.globalProgressIndicator.hide();
-        }
-    }
+    // REMOVED: analyzeCombined method - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
+    // This method used Promise.all() to analyze all images simultaneously with no rate limiting
+    // TODO: Will be replaced with queue-based analysis system in Phase 2
 
 
     /**
@@ -760,14 +554,7 @@ export class ContentScriptManager {
             // Show style scores from existing analysis
             if (this.detectedProducts.length > 0 && this.styleProfile) {
                 console.log('🎨 Displaying style scores...');
-                
-                // Create array of [product, result] pairs for safe updating
-                const productResultPairs = this.detectedProducts.map((product, i) => ({
-                    product,
-                    result: this.productAnalysisResults.get(product.element),
-                    index: i
-                })).filter(pair => pair.result); // Only include products that have results
-
+                // TODO: Style score display will be reimplemented with new queue system
             } else if (!this.styleProfile) {
                 console.log('ℹ️ No style profile available');
             } else {
