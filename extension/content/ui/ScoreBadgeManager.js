@@ -194,7 +194,7 @@ export class ScoreBadgeManager {
 
         // Apply styling
         badge.style.cssText = `
-            position: fixed;
+            position: absolute;
             background: ${backgroundColor};
             color: white;
             padding: 4px 8px;
