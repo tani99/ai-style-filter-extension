@@ -1273,7 +1273,9 @@ async function testBasicAIPrompt(prompt) {
         // Try modern LanguageModel API first
         if (typeof LanguageModel !== 'undefined') {
             console.log('Using LanguageModel API for test...');
-            const session = await LanguageModel.create();
+            const session = await LanguageModel.create({
+                outputLanguage: 'en'
+            });
             response = await session.prompt(prompt);
             console.log('LanguageModel response:', response);
             
@@ -1344,7 +1346,8 @@ async function executeAIPrompt(prompt, options = {}) {
                 console.log('Using LanguageModel API for prompt...');
                 const sessionOptions = {
                     temperature: options.temperature || 0.7,
-                    topK: options.topK || 40
+                    topK: options.topK || 40,
+                    outputLanguage: 'en'
                 };
                 
                 const session = await LanguageModel.create(sessionOptions);
@@ -1434,7 +1437,8 @@ async function executeAIPromptWithMultipleImages(prompt, imageBlobs, options = {
                     const sessionOptions = {
                         temperature: options.temperature || 0.7,
                         topK: options.topK || 40,
-                        expectedInputs: [{ type: "image" }]
+                        expectedInputs: [{ type: "image" }],
+                        outputLanguage: 'en'
                     };
 
                     const session = await LanguageModel.create(sessionOptions);
@@ -1538,7 +1542,8 @@ async function executeAIPromptWithImage(prompt, imageBlob, options = {}) {
                     const sessionOptions = {
                         temperature: options.temperature || 0.7,
                         topK: options.topK || 40,
-                        expectedInputs: [{ type: "image" }]
+                        expectedInputs: [{ type: "image" }],
+                        outputLanguage: 'en'
                     };
 
                     const session = await LanguageModel.create(sessionOptions);

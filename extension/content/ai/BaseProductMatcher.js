@@ -370,7 +370,8 @@ export class BaseProductMatcher {
             console.log('🤖 Creating LanguageModel session for this analysis...');
             const session = await window.LanguageModel.create({
                 temperature: 0.1,
-                topK: 5
+                topK: 5,
+                outputLanguage: 'en'
             });
             console.log('✅ LanguageModel session created');
 
@@ -511,7 +512,8 @@ export class BaseProductMatcher {
             console.log('🤖 Creating LanguageModel session for description...');
             const session = await window.LanguageModel.create({
                 temperature: 0.7,  // Higher temperature for more creative descriptions
-                topK: 20
+                topK: 20,
+                outputLanguage: 'en'
             });
             console.log('✅ LanguageModel session created');
 
