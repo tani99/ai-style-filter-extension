@@ -86,7 +86,7 @@ export class VisualIndicators {
         // Position overlays after ensuring image is loaded
         this.ensureImageLoadedAndPosition(img, overlay, eyeIcon);
 
-        console.log(`✅ Added indicator for detected image ${index + 1}`);
+        // Individual indicator logs removed - will show summary table instead
     }
 
     /**
@@ -118,7 +118,7 @@ export class VisualIndicators {
         // Position overlay after ensuring image is loaded
         this.ensureImageLoadedAndPosition(img, overlay, null);
 
-        console.log(`🚫 Added indicator for rejected image ${index + 1}`);
+        // Individual indicator logs removed - will show summary table instead
     }
 
     /**

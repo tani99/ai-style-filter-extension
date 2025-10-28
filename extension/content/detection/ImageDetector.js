@@ -58,9 +58,7 @@ export class ImageDetector {
                 const globalIndex = batchStart + i;
                 const imageInfo = DOMUtils.getImageInfo(img);
 
-                if (this.debugMode) {
-                    console.log(`🖼️ Processing image ${globalIndex + 1}/${candidateImages.length}:`, imageInfo.srcShort);
-                }
+                // Individual image processing logs removed - will show summary table instead
 
                 // Mark as processed
                 const imgKey = DOMUtils.getImageKey(img);
@@ -69,7 +67,6 @@ export class ImageDetector {
                 // Quick exclusion check (fast)
                 const visibilityCheck = this.visibilityChecker.isImageVisible(img);
                 if (!visibilityCheck.isVisible) {
-                    console.log(`❌ Image ${globalIndex + 1} rejected (visibility): ${imageInfo.alt || imageInfo.srcShort} - ${visibilityCheck.reason}`);
                     return {
                         type: 'rejected',
                         element: img,
@@ -83,7 +80,6 @@ export class ImageDetector {
                 // Quality check
                 const quality = this.visibilityChecker.checkImageQuality(img);
                 if (!quality.isValid) {
-                    console.log(`❌ Image ${globalIndex + 1} rejected (quality): ${imageInfo.alt || imageInfo.srcShort} - ${quality.reason}`);
                     return {
                         type: 'rejected',
                         element: img,
@@ -100,7 +96,6 @@ export class ImageDetector {
                         const isClothing = await this.isClothingImageCallback(img);
 
                         if (isClothing.isClothing) {
-                            console.log(`✅ Image ${globalIndex + 1} detected: ${imageInfo.alt || imageInfo.srcShort} - ${isClothing.reasoning || 'AI detected as clothing'}`);
                             return {
                                 type: 'detected',
                                 element: img,
@@ -110,7 +105,6 @@ export class ImageDetector {
                                 method: isClothing.method || 'ai_clothing_detection'  // More specific: indicates clothing detection
                             };
                         } else {
-                            console.log(`❌ Image ${globalIndex + 1} rejected (AI): ${imageInfo.alt || imageInfo.srcShort} - ${isClothing.reasoning || 'AI rejected as non-clothing'}`);
                             return {
                                 type: 'rejected',
                                 element: img,
@@ -121,10 +115,8 @@ export class ImageDetector {
                             };
                         }
                     } catch (error) {
-                        console.log(`⚠️ AI analysis failed for image ${globalIndex + 1}: ${imageInfo.alt || imageInfo.srcShort}`, error.message);
                         // Fallback to context analysis
                         const contextResult = this.analyzeImageContext(img);
-                        console.log(`${contextResult.isClothing ? '✅' : '❌'} Image ${globalIndex + 1} ${contextResult.isClothing ? 'detected' : 'rejected'} (context): ${imageInfo.alt || imageInfo.srcShort} - ${contextResult.reasoning}`);
                         return {
                             type: contextResult.isClothing ? 'detected' : 'rejected',
                             element: img,
@@ -199,9 +191,7 @@ export class ImageDetector {
         const imageProcessingPromises = newCandidates.map(async (img, i) => {
             const imageInfo = DOMUtils.getImageInfo(img);
 
-            if (this.debugMode) {
-                console.log(`🖼️ Processing new image ${i + 1}/${newCandidates.length}:`, imageInfo.srcShort);
-            }
+            // Individual image processing logs removed - will show summary table instead
 
             // Quick exclusion and visibility checks
             const visibilityCheck = this.visibilityChecker.isImageVisible(img);
@@ -241,7 +231,7 @@ export class ImageDetector {
                         method: isClothing.method || 'ai_clothing_detection'  // More specific: indicates clothing detection
                     };
                 } catch (error) {
-                    console.log(`⚠️ AI analysis failed for new image ${i + 1}:`, error);
+                    // AI analysis failed, will use fallback context analysis
                 }
             }
 

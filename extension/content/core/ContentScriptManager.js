@@ -251,6 +251,9 @@ export class ContentScriptManager {
                 site: this.currentSite.name
             };
 
+            // Print summary table of detection results
+            this.printImageDetectionSummary(results.detectedImages, results.rejectedImages);
+
             // Scroll-based detection moved to ViewportAnalysis.js module
 
             // Hide loading animation
@@ -278,6 +281,46 @@ export class ContentScriptManager {
     }
 
     /**
+     * Print summary table of detected images with their details
+     * @param {Array} detectedImages - Array of detected image objects
+     * @param {Array} rejectedImages - Array of rejected image objects
+     * @private
+     */
+    printImageDetectionSummary(detectedImages, rejectedImages) {
+        console.log('\n📊 IMAGE DETECTION SUMMARY');
+        console.log('═'.repeat(80));
+        
+        // Header
+        console.log('│ Index │ Alt Text                    │ Indicator │ Status    │');
+        console.log('├───────┼─────────────────────────────┼───────────┼───────────┤');
+        
+        // Process detected images
+        detectedImages.forEach((item, index) => {
+            const altText = item.imageInfo?.alt || 'No alt text';
+            const truncatedAlt = altText.length > 25 ? altText.substring(0, 22) + '...' : altText.padEnd(25);
+            const indicatorStatus = '✅ Added';
+            const status = 'Detected';
+            
+            console.log(`│ ${(index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │`);
+        });
+        
+        // Process rejected images (if any)
+        rejectedImages.forEach((item, index) => {
+            const altText = item.imageInfo?.alt || 'No alt text';
+            const truncatedAlt = altText.length > 25 ? altText.substring(0, 22) + '...' : altText.padEnd(25);
+            const indicatorStatus = '❌ None';
+            const status = 'Rejected';
+            
+            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │`);
+        });
+        
+        // Footer
+        console.log('└───────┴─────────────────────────────┴───────────┴───────────┘');
+        console.log(`📈 Total: ${detectedImages.length} detected, ${rejectedImages.length} rejected`);
+        console.log('═'.repeat(80) + '\n');
+    }
+
+    /**
      * Detect new images (for dynamic content)
      * Also triggers scoring for newly detected images
      * @returns {Promise<Object>} Detection results for new images
@@ -298,6 +341,9 @@ export class ContentScriptManager {
 
             // Add to detected products list
             this.detectedProducts.push(...results.detectedImages);
+
+            // Print summary table for new images
+            this.printImageDetectionSummary(results.detectedImages, results.rejectedImages);
 
             // REMOVED: Analysis trigger for lazy-loaded images - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
             // if (this.styleProfile) {
