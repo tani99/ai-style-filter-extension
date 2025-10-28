@@ -101,8 +101,9 @@ export class ScoreBadgeManager {
     /**
      * Show all badges for images that have scores stored
      * Called when toggle is switched ON
+     * @param {Array} detectedProducts - Optional array of detected products with analysis status
      */
-    showAllBadges() {
+    showAllBadges(detectedProducts = null) {
         console.log('🎨 Showing all score badges...');
 
         this.isVisible = true;
@@ -120,6 +121,24 @@ export class ScoreBadgeManager {
                 this.renderBadge(img, score, reasoning);
             }
         });
+
+        // Also show spinners for images currently being analyzed
+        if (detectedProducts && detectedProducts.length > 0) {
+            const inProgressCount = detectedProducts.filter(item => {
+                if (item.analysisStatus === 'in_progress' && item.element) {
+                    // Only show spinner if this image doesn't already have a badge
+                    if (!this.activeBadges.has(item.element)) {
+                        this.renderLoadingSpinner(item.element);
+                        return true;
+                    }
+                }
+                return false;
+            }).length;
+
+            if (inProgressCount > 0) {
+                console.log(`   Showed ${inProgressCount} loading spinners for in-progress analyses`);
+            }
+        }
 
         console.log(`✅ All badges shown (${this.activeBadges.size} total)`);
     }

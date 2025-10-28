@@ -605,8 +605,8 @@ export class ContentScriptManager {
         this.isStyleModeOn = isOn;
 
         if (isOn) {
-            // Toggle ON: Show all badges for images with scores
-            this.scoreBadgeManager.showAllBadges();
+            // Toggle ON: Show all badges for images with scores AND spinners for in-progress analyses
+            this.scoreBadgeManager.showAllBadges(this.detectedProducts);
         } else {
             // Toggle OFF: Hide all badges and clear effects
             this.scoreBadgeManager.hideAllBadges();
