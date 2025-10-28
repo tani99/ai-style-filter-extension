@@ -149,6 +149,11 @@ export class TryOnOverlays {
                 throw new Error('No try-on photo uploaded. Please upload a try-on photo in the extension settings.');
             }
 
+            // Validate that the image src is a valid HTTP/HTTPS URL
+            if (!img.src || !img.src.startsWith('http')) {
+                throw new Error('The image valid src is not available yet. It might be loading, please try again in a bit.');
+            }
+
             // Convert the clothing image URL to base64
             console.log('📥 Fetching clothing image from:', img.src);
             const clothingImageBase64 = await this.convertImageToBase64(img.src);
