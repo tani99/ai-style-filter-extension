@@ -29,6 +29,37 @@ export class ScoreBadgeManager {
     }
 
     /**
+     * Render loading spinner for an image while analysis is in progress
+     * Called when analysis starts (if toggle is ON)
+     * @param {HTMLImageElement} img - Image element
+     */
+    renderLoadingSpinner(img) {
+        // Skip if toggle is OFF
+        if (!this.isVisible) {
+            return;
+        }
+
+        // If a badge already exists for this image, don't add a spinner
+        if (this.activeBadges.has(img)) {
+            return;
+        }
+
+        // Create spinner badge element
+        const spinner = this.createLoadingSpinnerElement();
+
+        // Position at top-right of image
+        this.positionBadge(spinner, img);
+
+        // Add to DOM
+        document.body.appendChild(spinner);
+
+        // Track spinner (will be replaced by actual badge)
+        this.activeBadges.set(img, spinner);
+
+        console.log(`⏳ Loading spinner rendered`);
+    }
+
+    /**
      * Render badge for a single image (progressive rendering)
      * Called immediately after each analysis completes (if toggle is ON)
      * @param {HTMLImageElement} img - Image element
@@ -42,11 +73,11 @@ export class ScoreBadgeManager {
             return;
         }
 
-        // Don't render duplicate badges
+        // If a spinner or badge already exists, replace it
         if (this.activeBadges.has(img)) {
-            console.log(`⚠️ Badge already exists for image, updating instead`);
-            this.updateBadge(img, score, reasoning);
-            return;
+            const existingBadge = this.activeBadges.get(img);
+            existingBadge.remove();
+            this.activeBadges.delete(img);
         }
 
         // Create badge element
@@ -156,6 +187,74 @@ export class ScoreBadgeManager {
         img.style.filter = '';
         img.style.border = '';
         img.style.boxShadow = '';
+    }
+
+    /**
+     * Create loading spinner badge element
+     * @returns {HTMLElement} Spinner badge element
+     */
+    createLoadingSpinnerElement() {
+        const badge = document.createElement('div');
+        badge.className = 'ai-style-score-badge ai-style-loading-spinner';
+
+        // Create spinner icon
+        const spinner = document.createElement('div');
+        spinner.className = 'ai-style-spinner-icon';
+        spinner.style.cssText = `
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: ai-style-spin 1s linear infinite;
+        `;
+
+        badge.appendChild(spinner);
+
+        // Apply styling (similar to score badge but with spinner background)
+        badge.style.cssText = `
+            position: absolute;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10000;
+            pointer-events: none;
+            user-select: none;
+            white-space: nowrap;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        // Ensure spin animation keyframes exist
+        this.ensureSpinAnimation();
+
+        return badge;
+    }
+
+    /**
+     * Ensure spin animation keyframes are added to document
+     */
+    ensureSpinAnimation() {
+        const keyframesId = 'ai-style-spin-keyframes';
+
+        if (!document.querySelector(`#${keyframesId}`)) {
+            const style = document.createElement('style');
+            style.id = keyframesId;
+            style.textContent = `
+                @keyframes ai-style-spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 
     /**

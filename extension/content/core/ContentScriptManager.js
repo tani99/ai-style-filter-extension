@@ -752,6 +752,11 @@ export class ContentScriptManager {
                 return;
             }
 
+            // Show loading spinner if style mode is ON
+            if (this.isStyleModeOn) {
+                this.scoreBadgeManager.renderLoadingSpinner(imgElement);
+            }
+
             // Fire off analysis (don't await - let it run in background)
             this.personalStyleMatcher.analyzeProduct(
                 imgElement,
