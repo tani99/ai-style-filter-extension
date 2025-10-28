@@ -41,7 +41,7 @@ export class VisualIndicators {
 
     /**
      * Add detected item overlays to an image
-     * Creates visual overlays with green border and eye icon for virtual try-on
+     * Creates visual overlays with eye icon for virtual try-on (green border disabled)
      * @param {Object} item - Image item
      * @param {number} index - Image index for identification
      */
@@ -51,8 +51,8 @@ export class VisualIndicators {
         // Remove existing indicators for this image
         this.removeImageIndicator(img);
 
-        // Create main border overlay (basic green)
-        const overlay = this.createGreenBorderOverlay();
+        // Green border overlay is now disabled
+        // const overlay = this.createGreenBorderOverlay();
 
         // Create eye icon overlay for virtual try-on
         const eyeIcon = this.tryOnOverlays.createEyeIconOverlay();
@@ -75,16 +75,16 @@ export class VisualIndicators {
         // Add tooltip
         img.title = `Detected clothing item ${index + 1}`;
 
-        // Insert overlay and eye icon into document
-        document.body.appendChild(overlay);
+        // Insert eye icon into document (overlay insertion removed)
+        // document.body.appendChild(overlay);
         document.body.appendChild(eyeIcon);
 
-        // Store references and setup position updates
-        this.trackOverlay(img, overlay, index, eyeIcon);
-        this.setupPositionUpdates(img, overlay, eyeIcon);
+        // Store references and setup position updates (no overlay)
+        this.trackOverlay(img, null, index, eyeIcon);
+        this.setupPositionUpdates(img, null, eyeIcon);
 
-        // Position overlays after ensuring image is loaded
-        this.ensureImageLoadedAndPosition(img, overlay, eyeIcon);
+        // Position eye icon after ensuring image is loaded (no overlay)
+        this.ensureImageLoadedAndPosition(img, null, eyeIcon);
 
         // Individual indicator logs removed - will show summary table instead
     }
@@ -169,26 +169,30 @@ export class VisualIndicators {
 
     /**
      * Position overlay relative to image
-     * @param {HTMLElement} overlay - Overlay element
+     * @param {HTMLElement} overlay - Overlay element (can be null)
      * @param {HTMLImageElement} img - Image element
      */
     positionOverlay(overlay, img) {
-        GeometryUtils.positionOverlay(overlay, img);
+        if (overlay) {
+            GeometryUtils.positionOverlay(overlay, img);
+        }
     }
 
     /**
      * Ensure image is loaded and position overlays correctly
      * Position immediately for all images, handle lazy-loading via event listeners
      * @param {HTMLImageElement} img - Image element
-     * @param {HTMLElement} overlay - Overlay element
-     * @param {HTMLElement} eyeIcon - Eye icon element
+     * @param {HTMLElement} overlay - Overlay element (can be null)
+     * @param {HTMLElement} eyeIcon - Eye icon element (can be null)
      */
     ensureImageLoadedAndPosition(img, overlay, eyeIcon) {
         const positionBoth = () => {
             // Only position if image has valid dimensions
             const rect = img.getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0) {
-                this.positionOverlay(overlay, img);
+                if (overlay) {
+                    this.positionOverlay(overlay, img);
+                }
                 if (eyeIcon) {
                     this.tryOnOverlays.positionEyeIcon(eyeIcon, img);
                 }
@@ -215,7 +219,7 @@ export class VisualIndicators {
     /**
      * Track overlay elements for cleanup and updates
      * @param {HTMLImageElement} img - Image element
-     * @param {HTMLElement} overlay - Main overlay element
+     * @param {HTMLElement} overlay - Main overlay element (can be null)
      * @param {HTMLElement|null} eyeIcon - Eye icon element for virtual try-on
      */
     trackOverlay(img, overlay, index, eyeIcon = null) {
@@ -229,7 +233,9 @@ export class VisualIndicators {
         this.overlayMap.set(img, overlayData);
 
         // Set data attributes for easy identification
-        overlay.dataset.aiStyleTargetIndex = index;
+        if (overlay) {
+            overlay.dataset.aiStyleTargetIndex = index;
+        }
         if (eyeIcon) {
             eyeIcon.dataset.aiStyleTargetIndex = index;
         }
@@ -266,11 +272,13 @@ export class VisualIndicators {
 
         const updateAllPositions = () => {
             this.updateHandlers.forEach((data) => {
-                if (data.img && data.overlay) {
+                if (data.img) {
                     const rect = data.img.getBoundingClientRect();
                     // Only update if image has valid dimensions
                     if (rect.width > 0 && rect.height > 0) {
-                        this.positionOverlay(data.overlay, data.img);
+                        if (data.overlay) {
+                            this.positionOverlay(data.overlay, data.img);
+                        }
                         if (data.eyeIcon) {
                             this.tryOnOverlays.positionEyeIcon(data.eyeIcon, data.img);
                         }
@@ -350,7 +358,9 @@ export class VisualIndicators {
      */
     updateAllPositions() {
         this.overlayMap.forEach((overlayData, img) => {
-            this.positionOverlay(overlayData.overlay, img);
+            if (overlayData.overlay) {
+                this.positionOverlay(overlayData.overlay, img);
+            }
             if (overlayData.eyeIcon) {
                 this.tryOnOverlays.positionEyeIcon(overlayData.eyeIcon, img);
             }
@@ -372,11 +382,11 @@ export class VisualIndicators {
     getIndicatorStats() {
         return {
             totalImages: this.overlayMap.size,
-            detectedImages: Array.from(this.overlayMap.values()).filter(data => 
-                data.overlay.dataset.aiStyleOverlay === 'detected'
+            detectedImages: Array.from(this.overlayMap.values()).filter(data =>
+                data.overlay && data.overlay.dataset.aiStyleOverlay === 'detected'
             ).length,
-            rejectedImages: Array.from(this.overlayMap.values()).filter(data => 
-                data.overlay.dataset.aiStyleOverlay === 'rejected'
+            rejectedImages: Array.from(this.overlayMap.values()).filter(data =>
+                data.overlay && data.overlay.dataset.aiStyleOverlay === 'rejected'
             ).length
         };
     }
