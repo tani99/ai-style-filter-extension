@@ -75,6 +75,9 @@ export class ContentScriptManager {
         this.isShowingStyleSuggestions = false; // true = show UI suggestions, false = hide UI
         this.isStyleModeOn = false; // NEW: Simple toggle for score badges and visual effects
 
+        // Background task
+        this.backgroundTaskInterval = null; // Interval ID for background task
+
         // Performance settings
         // Viewport analysis moved to separate module (ViewportAnalysis.js)
     }
@@ -123,6 +126,9 @@ export class ContentScriptManager {
 
         this.isInitialized = true;
         console.log(`🎉 ContentScriptManager initialization complete - Total: ${(performance.now() - initStart).toFixed(2)}ms`);
+
+        // Start background task
+        this.startBackgroundTask();
     }
 
     /**
@@ -415,6 +421,10 @@ export class ContentScriptManager {
         this.processedImages.clear();
         this.lastDetectionResults = null;
         this.clearProductAnalysis(); // Also clear analysis data
+        
+        // Stop background task when clearing detection
+        this.stopBackgroundTask();
+        
         console.log('🧹 Product detection cleared');
     }
 
@@ -579,6 +589,31 @@ export class ContentScriptManager {
             this.visualIndicators.clearAllIndicators();
 
             console.log('✅ Style suggestions hidden - UI hidden (background analysis preserved)');
+        }
+    }
+
+    /**
+     * Start background task that runs every 5 seconds
+     * @private
+     */
+    startBackgroundTask() {
+        console.log('🔄 Starting background task (runs every 5 seconds)');
+        
+        this.backgroundTaskInterval = setInterval(() => {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`🔄 Running in background - ${timestamp}`);
+        }, 5000); // 5 seconds
+    }
+
+    /**
+     * Stop the background task
+     * @private
+     */
+    stopBackgroundTask() {
+        if (this.backgroundTaskInterval) {
+            clearInterval(this.backgroundTaskInterval);
+            this.backgroundTaskInterval = null;
+            console.log('⏹️ Background task stopped');
         }
     }
 }
