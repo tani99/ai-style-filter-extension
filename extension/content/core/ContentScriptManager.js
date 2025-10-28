@@ -294,11 +294,11 @@ export class ContentScriptManager {
      */
     printImageDetectionSummary(detectedImages, rejectedImages) {
         console.log('\n📊 IMAGE DETECTION SUMMARY');
-        console.log('═'.repeat(80));
+        console.log('═'.repeat(100));
         
-        // Header
-        console.log('│ Index │ Alt Text                    │ Indicator │ Status    │');
-        console.log('├───────┼─────────────────────────────┼───────────┼───────────┤');
+        // Header with src column
+        console.log('│ Index │ Alt Text                    │ Indicator │ Status    │ Image Src');
+        console.log('├───────┼─────────────────────────────┼───────────┼───────────┼─────────────────────────────────────┤');
         
         // Process detected images
         detectedImages.forEach((item, index) => {
@@ -306,8 +306,10 @@ export class ContentScriptManager {
             const truncatedAlt = altText.length > 25 ? altText.substring(0, 22) + '...' : altText.padEnd(25);
             const indicatorStatus = '✅ Added';
             const status = 'Detected';
+            const src = item.imageInfo?.src || item.element?.src || 'No src';
+            const truncatedSrc = src.length > 35 ? src.substring(0, 32) + '...' : src.padEnd(35);
             
-            console.log(`│ ${(index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │`);
+            console.log(`│ ${(index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │ ${truncatedSrc} │`);
         });
         
         // Process rejected images (if any)
@@ -316,14 +318,16 @@ export class ContentScriptManager {
             const truncatedAlt = altText.length > 25 ? altText.substring(0, 22) + '...' : altText.padEnd(25);
             const indicatorStatus = '❌ None';
             const status = 'Rejected';
+            const src = item.imageInfo?.src || item.element?.src || 'No src';
+            const truncatedSrc = src.length > 35 ? src.substring(0, 32) + '...' : src.padEnd(35);
             
-            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │`);
+            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │ ${truncatedSrc} │`);
         });
         
         // Footer
-        console.log('└───────┴─────────────────────────────┴───────────┴───────────┘');
+        console.log('└───────┴─────────────────────────────┴───────────┴───────────┴─────────────────────────────────────┘');
         console.log(`📈 Total: ${detectedImages.length} detected, ${rejectedImages.length} rejected`);
-        console.log('═'.repeat(80) + '\n');
+        console.log('═'.repeat(100) + '\n');
     }
 
     // REMOVED: detectNewImages method - lazy loading detection disabled
@@ -603,13 +607,47 @@ export class ContentScriptManager {
             const timestamp = new Date().toLocaleTimeString();
             console.log(`🔄 Running in background - ${timestamp}`);
             
-            // Print image src for all detected images
+            // Check for updated src attributes and update stored images
             if (this.detectedProducts && this.detectedProducts.length > 0) {
-                console.log('📸 Detected images:');
+                let updatedCount = 0;
+
                 this.detectedProducts.forEach((item, index) => {
-                    const src = item.imageInfo?.src || item.element?.src || 'No src found';
-                    console.log(`  ${index + 1}. ${src}`);
+                    // Query DOM element by alt text instead of data-detection-index
+                    // This is more reliable for lazy-loaded images where DOM elements may be replaced
+                    const altText = item.imageInfo?.alt;
+                    let currentElement = null;
+
+                    if (altText && altText !== '(no alt text)') {
+                        // Find the image by alt text (safer than querySelector with special characters)
+                        const allImages = document.querySelectorAll('img');
+                        currentElement = Array.from(allImages).find(img => img.alt === altText);
+                    }
+
+                    const currentSrc = currentElement?.src || '';
+                    const storedSrc = item.imageInfo?.src || '';
+
+                    // Check if src has been updated (lazy loading completed)
+                    if (currentSrc && currentSrc !== storedSrc && !currentSrc.startsWith('data:')) {
+                        // Update the stored imageInfo with new src
+                        item.imageInfo.src = currentSrc;
+                        item.imageInfo.srcShort = currentSrc.length > 60 ?
+                            '.../' + currentSrc.split('/').pop().substring(0, 57) + '...' :
+                            currentSrc;
+
+                        // Update the stored element reference to the fresh DOM element
+                        item.element = currentElement;
+
+                        updatedCount++;
+                        console.log(`🔄 Updated image ${index + 1} (alt: "${altText}"): ${storedSrc} → ${currentSrc}`);
+                    }
                 });
+
+                if (updatedCount > 0) {
+                    console.log(`✅ Updated ${updatedCount} images with new src attributes`);
+                }
+
+                // Print summary table with image src column
+                this.printImageDetectionSummary(this.detectedProducts, []);
             } else {
                 console.log('📸 No detected images found');
             }

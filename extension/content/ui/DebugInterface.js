@@ -447,7 +447,7 @@ export class DebugInterface {
                     alt: img.alt,
                     src: img.src.slice(-50),
                     className: img.className,
-                    index: img.dataset.aiStyleIndex
+                    index: img.dataset.detectionIndex
                 })),
                 rejectedImages: Array.from(document.querySelectorAll('[data-ai-style-rejected="true"]')).map(img => ({
                     alt: img.alt,

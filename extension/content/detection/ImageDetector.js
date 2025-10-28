@@ -151,7 +151,7 @@ export class ImageDetector {
                 // Mark image element as clothing item
                 // 'true' = is clothing, 'false' = not clothing, undefined = not analyzed
                 result.element.dataset.clothingItemDetected = 'true';
-                result.element.dataset.aiStyleIndex = detectedImages.length - 1;
+                result.element.dataset.detectionIndex = detectedImages.length - 1;
             } else {
                 rejectedImages.push(result);
                 result.element.dataset.clothingItemDetected = 'false';  // Not a clothing item
@@ -286,7 +286,7 @@ export class ImageDetector {
         const markedImages = document.querySelectorAll('[data-ai-style-detected]');
         markedImages.forEach(img => {
             img.removeAttribute('data-ai-style-detected');
-            img.removeAttribute('data-ai-style-index');
+            img.removeAttribute('data-detection-index');
         });
     }
 

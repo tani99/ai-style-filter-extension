@@ -70,7 +70,7 @@ export class VisualIndicators {
         // clothingItemDetected: 'true' = confirmed clothing item, 'false' = not clothing, undefined = not analyzed
         img.dataset.clothingItemDetected = 'true';
         img.dataset.aiStyleDetected = 'true'; // For StyleOverlayController to find images
-        img.dataset.aiStyleIndex = index;
+        img.dataset.detectionIndex = index;
 
         // Add tooltip
         img.title = `Detected clothing item ${index + 1}`;
@@ -105,7 +105,7 @@ export class VisualIndicators {
 
         // Set data attributes and tooltip
         img.dataset.clothingItemDetected = 'false';  // Not a clothing item
-        img.dataset.aiStyleIndex = index;
+        img.dataset.detectionIndex = index;
         img.title = `Rejected image ${index + 1}`;
 
         // Insert overlay into document

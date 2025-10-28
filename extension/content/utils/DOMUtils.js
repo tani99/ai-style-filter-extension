@@ -59,7 +59,7 @@ export class DOMUtils {
      */
     static getImageSource(img) {
         return {
-            src: img.dataset.src || img.src || '',
+            src: img.src || '',
             dataSrc: img.dataset.src || '',
             alt: img.alt || '',
             title: img.title || ''
