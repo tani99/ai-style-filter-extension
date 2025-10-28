@@ -59,7 +59,7 @@ export class DOMUtils {
      */
     static getImageSource(img) {
         return {
-            src: img.src || '',
+            src: img.dataset.src || img.src || '',
             dataSrc: img.dataset.src || '',
             alt: img.alt || '',
             title: img.title || ''
@@ -73,7 +73,7 @@ export class DOMUtils {
      */
     static getImageInfo(img) {
         const rect = img.getBoundingClientRect();
-        const src = img.src || img.dataset.src || '';
+        const src = img.dataset.src || img.src || '';
 
         // Create a short version of the src for logging
         let srcShort = src;

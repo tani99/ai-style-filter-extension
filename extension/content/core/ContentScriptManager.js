@@ -602,6 +602,17 @@ export class ContentScriptManager {
         this.backgroundTaskInterval = setInterval(() => {
             const timestamp = new Date().toLocaleTimeString();
             console.log(`🔄 Running in background - ${timestamp}`);
+            
+            // Print image src for all detected images
+            if (this.detectedProducts && this.detectedProducts.length > 0) {
+                console.log('📸 Detected images:');
+                this.detectedProducts.forEach((item, index) => {
+                    const src = item.imageInfo?.src || item.element?.src || 'No src found';
+                    console.log(`  ${index + 1}. ${src}`);
+                });
+            } else {
+                console.log('📸 No detected images found');
+            }
         }, 5000); // 5 seconds
     }
 
