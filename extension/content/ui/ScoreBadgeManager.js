@@ -287,13 +287,6 @@ export class ScoreBadgeManager {
         badge.className = 'ai-style-score-badge';
         badge.textContent = `${score}/10`;
 
-        // Add reasoning as tooltip
-        if (reasoning && reasoning.trim()) {
-            badge.title = reasoning.length > 200
-                ? reasoning.substring(0, 200) + '...'
-                : reasoning;
-        }
-
         // Determine background color based on score
         let backgroundColor;
         if (score >= 9) {
@@ -322,15 +315,252 @@ export class ScoreBadgeManager {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
             z-index: 10000;
-            pointer-events: none;
+            pointer-events: auto;
             user-select: none;
             white-space: nowrap;
             border: 2px solid rgba(255, 255, 255, 0.3);
             min-width: 40px;
             text-align: center;
+            cursor: help;
         `;
 
+        // Store reasoning in data attribute for easy updates
+        if (reasoning && reasoning.trim()) {
+            badge.dataset.reasoning = reasoning;
+            badge.setAttribute('data-tooltip-setup', 'true');
+            this.setupTooltip(badge);
+            console.log(`📝 Tooltip setup for badge with reasoning (${reasoning.length} chars)`);
+        } else {
+            console.log('⚠️ No reasoning provided for badge tooltip');
+        }
+
         return badge;
+    }
+
+    /**
+     * Setup tooltip for badge that shows reasoning on hover
+     * @param {HTMLElement} badge - Badge element
+     */
+    setupTooltip(badge) {
+        let tooltip = null;
+        let hideTimeout = null;
+
+        // Ensure tooltip styles are injected
+        this.ensureTooltipStyles();
+
+        const showTooltip = (e) => {
+            // Get current reasoning from data attribute
+            let reasoning = badge.dataset.reasoning;
+            
+            // Fallback: try to get reasoning from the image element if badge doesn't have it
+            if (!reasoning || !reasoning.trim()) {
+                // Try to find the associated image element
+                for (const [img, badgeElement] of this.activeBadges.entries()) {
+                    if (badgeElement === badge && img.dataset.aiStyleReasoning) {
+                        reasoning = img.dataset.aiStyleReasoning;
+                        badge.dataset.reasoning = reasoning; // Store it on badge for next time
+                        break;
+                    }
+                }
+            }
+            
+            if (!reasoning || !reasoning.trim()) {
+                console.log('⚠️ No reasoning found for badge tooltip', badge);
+                return;
+            }
+
+            console.log('💡 Showing tooltip with reasoning:', reasoning.substring(0, 50) + '...');
+
+            // Clear any pending hide timeout
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+
+            // If tooltip already exists, update content and position
+            if (tooltip && tooltip.isConnected) {
+                tooltip.textContent = reasoning;
+                tooltip.style.opacity = '1';
+                tooltip.style.visibility = 'visible';
+                tooltip.style.display = 'block';
+                this.positionTooltip(tooltip, badge);
+                return;
+            }
+
+            // Create tooltip element
+            tooltip = document.createElement('div');
+            tooltip.className = 'ai-style-score-tooltip';
+            tooltip.textContent = reasoning;
+            tooltip.style.display = 'block';
+            tooltip.style.opacity = '0';
+            tooltip.style.visibility = 'visible'; // Make visible for measurement but transparent
+            tooltip.style.pointerEvents = 'none';
+            
+            // Add to DOM first
+            document.body.appendChild(tooltip);
+            
+            // Position tooltip (will calculate dimensions while invisible)
+            this.positionTooltip(tooltip, badge);
+            
+            // Small delay for smooth fade-in
+            requestAnimationFrame(() => {
+                if (tooltip && tooltip.isConnected) {
+                    tooltip.style.opacity = '1';
+                    tooltip.style.visibility = 'visible';
+                    tooltip.style.display = 'block';
+                    // Reposition after it becomes fully visible (in case dimensions changed)
+                    requestAnimationFrame(() => {
+                        if (tooltip && tooltip.isConnected) {
+                            this.positionTooltip(tooltip, badge);
+                        }
+                    });
+                }
+            });
+        };
+
+        const hideTooltip = () => {
+            if (!tooltip) return;
+            
+            // Fade out
+            tooltip.style.opacity = '0';
+            
+            // Remove from DOM after fade
+            hideTimeout = setTimeout(() => {
+                if (tooltip) {
+                    tooltip.style.visibility = 'hidden';
+                    tooltip.style.display = 'none';
+                    tooltip.remove();
+                    tooltip = null;
+                }
+                hideTimeout = null;
+            }, 200); // Match transition duration
+        };
+
+        // Event listeners
+        badge.addEventListener('mouseenter', showTooltip);
+        badge.addEventListener('mouseleave', hideTooltip);
+        badge.addEventListener('mousemove', (e) => {
+            if (tooltip) {
+                this.positionTooltip(tooltip, badge);
+            }
+        });
+
+        // Clean up on badge removal
+        const observer = new MutationObserver(() => {
+            if (!badge.isConnected && tooltip) {
+                tooltip.remove();
+                tooltip = null;
+                if (hideTimeout) {
+                    clearTimeout(hideTimeout);
+                    hideTimeout = null;
+                }
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    /**
+     * Position tooltip near the badge, ensuring it stays on screen
+     * @param {HTMLElement} tooltip - Tooltip element
+     * @param {HTMLElement} badge - Badge element
+     */
+    positionTooltip(tooltip, badge) {
+        const badgeRect = badge.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const padding = 8;
+
+        // Ensure tooltip is in the DOM and visible for measurement
+        if (!tooltip.isConnected) {
+            return;
+        }
+
+        // Make sure tooltip is measurable (visible but transparent if needed)
+        const currentOpacity = tooltip.style.opacity || window.getComputedStyle(tooltip).opacity;
+        const currentVisibility = tooltip.style.visibility || window.getComputedStyle(tooltip).visibility;
+        
+        if (currentVisibility === 'hidden') {
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '0';
+        }
+
+        // Force layout recalculation
+        void tooltip.offsetWidth; // Force reflow
+        const tooltipWidth = tooltip.offsetWidth || 300;
+        const tooltipHeight = tooltip.offsetHeight || 100;
+
+        // Don't restore visibility here - let the showTooltip function handle it
+
+        // Start by positioning below the badge (centered)
+        let top = badgeRect.bottom + window.scrollY + padding;
+        let left = badgeRect.left + window.scrollX + (badgeRect.width / 2) - (tooltipWidth / 2);
+
+        // Adjust if tooltip goes off right edge
+        if (left + tooltipWidth > window.scrollX + viewportWidth - padding) {
+            left = window.scrollX + viewportWidth - tooltipWidth - padding;
+        }
+
+        // Adjust if tooltip goes off left edge
+        if (left < window.scrollX + padding) {
+            left = window.scrollX + padding;
+        }
+
+        // If tooltip goes off bottom, position above badge instead
+        if (badgeRect.bottom + tooltipHeight + padding > viewportHeight) {
+            top = badgeRect.top + window.scrollY - tooltipHeight - padding;
+            // Make sure it doesn't go off top
+            if (top < window.scrollY + padding) {
+                top = window.scrollY + padding;
+            }
+        }
+
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+    }
+
+    /**
+     * Ensure tooltip styles are injected into the document
+     */
+    ensureTooltipStyles() {
+        const styleId = 'ai-style-score-tooltip-styles';
+
+        if (!document.querySelector(`#${styleId}`)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .ai-style-score-tooltip {
+                    position: absolute !important;
+                    background: rgba(0, 0, 0, 0.95) !important;
+                    color: white !important;
+                    padding: 8px 12px !important;
+                    border-radius: 6px !important;
+                    font-size: 13px !important;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+                    line-height: 1.4 !important;
+                    max-width: 300px !important;
+                    min-width: 150px !important;
+                    word-wrap: break-word !important;
+                    white-space: normal !important;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+                    z-index: 100001 !important;
+                    pointer-events: none !important;
+                    user-select: none !important;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+                    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                }
+
+                .ai-style-score-badge {
+                    transition: transform 0.15s ease-out;
+                }
+
+                .ai-style-score-badge:hover {
+                    transform: translateX(-100%) scale(1.05) !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 
     /**
@@ -358,7 +588,18 @@ export class ScoreBadgeManager {
         if (!badge) return;
 
         badge.textContent = `${score}/10`;
-        badge.title = reasoning || '';
+        
+        // Update reasoning in data attribute for tooltip
+        if (reasoning && reasoning.trim()) {
+            badge.dataset.reasoning = reasoning;
+            // Setup tooltip if not already set up
+            if (!badge.hasAttribute('data-tooltip-setup')) {
+                this.setupTooltip(badge);
+                badge.setAttribute('data-tooltip-setup', 'true');
+            }
+        } else {
+            badge.removeAttribute('data-reasoning');
+        }
 
         this.applyVisualEffects(img, score);
     }
