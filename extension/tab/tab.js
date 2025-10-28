@@ -556,45 +556,46 @@ function createFallbackProfile(rawResponse) {
         analysis_summary: "Style analysis completed, but response formatting needs improvement.",
         color_palette: {
             best_colors: ["Classic Navy", "Crisp White", "Soft Gray"],
-            color_reasoning: "These versatile colors work well for most people",
+            color_reasoning: "These versatile colors work well for most people and are universally flattering",
             avoid_colors: ["Neon colors"]
         },
         style_categories: [
             {
                 name: "Classic",
                 confidence: "medium",
-                description: "Timeless and versatile pieces"
+                description: "Timeless and versatile pieces that work with many body types"
             },
             {
                 name: "Casual",
-                confidence: "medium", 
-                description: "Comfortable everyday wear"
+                confidence: "medium",
+                description: "Comfortable everyday wear that suits most lifestyles"
             },
             {
                 name: "Modern",
                 confidence: "medium",
-                description: "Contemporary styling"
+                description: "Contemporary styling with universal appeal"
             }
         ],
         body_type_analysis: {
+            observed_features: ["Unable to analyze - using defaults"],
             silhouettes: ["Tailored", "Relaxed", "Structured"],
             fits: ["Well-fitted", "Comfortable", "Flattering"],
-            recommendations: "Focus on pieces that make you feel confident"
+            recommendations: "Focus on pieces that make you feel confident and comfortable. Try different silhouettes to find what works best for your body type."
         },
         pattern_preferences: {
             recommended_patterns: ["Solid colors", "Subtle textures", "Classic stripes"],
-            pattern_reasoning: "Simple patterns are versatile and timeless",
+            pattern_reasoning: "Simple patterns are versatile and tend to be universally flattering",
             avoid_patterns: ["Overly busy prints"]
         },
         overall_aesthetic: {
             keywords: ["Versatile", "Classic", "Confident"],
-            description: "A classic and versatile style that can adapt to different occasions",
+            description: "A classic and versatile style that can adapt to different occasions and body types",
             style_personality: "Confident and adaptable"
         },
         shopping_recommendations: {
             key_pieces: ["Well-fitted jeans", "Classic blazer", "Quality basics"],
             brands_to_consider: ["Universal brands with good fit"],
-            style_tips: ["Focus on fit", "Invest in quality basics", "Choose versatile pieces"]
+            style_tips: ["Focus on fit and comfort", "Invest in quality basics", "Choose versatile pieces that can be mixed and matched"]
         },
         generated_at: Date.now(),
         version: '1.0',
@@ -611,7 +612,7 @@ function displayStyleProfile(profile) {
     analysisContent.innerHTML = `
         <div class="style-profile ${isAnimated ? 'fade-in' : ''}">
             <div class="profile-header">
-                <h3>✨ Your Personal Style Profile</h3>
+                <h3>✨ What Looks Best On You</h3>
                 <p class="analysis-summary">${profile.analysis_summary}</p>
                 ${profile.fallback ? '<p class="fallback-note">⚠️ Generated from fallback data - AI parsing incomplete</p>' : ''}
             </div>
@@ -619,10 +620,10 @@ function displayStyleProfile(profile) {
             <div class="profile-sections">
                 <!-- Color Palette Section -->
                 <div class="profile-section">
-                    <h4>🎨 Color Palette</h4>
+                    <h4>🎨 Colors That Flatter You</h4>
                     <div class="color-section">
                         <div class="color-group">
-                            <strong>Best Colors:</strong>
+                            <strong>Recommended Colors:</strong>
                             <div class="color-list">
                                 ${profile.color_palette.best_colors.map(color => 
                                     `<span class="color-tag best">${color}</span>`
@@ -645,7 +646,7 @@ function displayStyleProfile(profile) {
                 
                 <!-- Style Categories Section -->
                 <div class="profile-section">
-                    <h4>👗 Style Categories</h4>
+                    <h4>👗 Styles That Suit You</h4>
                     <div class="style-categories">
                         ${profile.style_categories.map((category, index) => `
                             <div class="style-category ${category.confidence}">
@@ -661,12 +662,22 @@ function displayStyleProfile(profile) {
                 
                 <!-- Body Type Analysis Section -->
                 <div class="profile-section">
-                    <h4>👤 Fit & Silhouette</h4>
+                    <h4>👤 Body Type & Proportions</h4>
                     <div class="body-analysis">
+                        ${profile.body_type_analysis.observed_features ? `
+                            <div class="fit-group">
+                                <strong>Observed Features:</strong>
+                                <div class="tag-list">
+                                    ${profile.body_type_analysis.observed_features.map(feature =>
+                                        `<span class="fit-tag">${feature}</span>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
                         <div class="fit-group">
-                            <strong>Recommended Silhouettes:</strong>
+                            <strong>Flattering Silhouettes:</strong>
                             <div class="tag-list">
-                                ${profile.body_type_analysis.silhouettes.map(silhouette => 
+                                ${profile.body_type_analysis.silhouettes.map(silhouette =>
                                     `<span class="fit-tag">${silhouette}</span>`
                                 ).join('')}
                             </div>
@@ -674,7 +685,7 @@ function displayStyleProfile(profile) {
                         <div class="fit-group">
                             <strong>Best Fits:</strong>
                             <div class="tag-list">
-                                ${profile.body_type_analysis.fits.map(fit => 
+                                ${profile.body_type_analysis.fits.map(fit =>
                                     `<span class="fit-tag">${fit}</span>`
                                 ).join('')}
                             </div>
@@ -764,7 +775,7 @@ function displayStyleProfile(profile) {
                     <button class="cancel-btn" id="cancelEditBtn" style="display: none;">❌ Cancel</button>
                 </div>
                 <p class="generated-info">Generated on ${new Date(profile.generated_at).toLocaleDateString()} • Version ${profile.version}</p>
-                <button class="regenerate-btn" id="regenerateProfileBtn">🔄 Regenerate Profile</button>
+                <button class="regenerate-btn" id="regenerateProfileBtn">🔄 Regenerate Recommendations</button>
             </div>
         </div>
     `;
@@ -808,13 +819,13 @@ async function regenerateStyleProfile() {
         analysisContent.innerHTML = `
             <div class="analysis-loading">
                 <div class="loading-spinner"></div>
-                <h3>Regenerating Your Style Profile...</h3>
-                <p>Creating a fresh analysis of your ${photos.length} photo${photos.length > 1 ? 's' : ''}</p>
+                <h3>Regenerating Your Style Recommendations...</h3>
+                <p>Creating a fresh analysis of your features from ${photos.length} photo${photos.length > 1 ? 's' : ''}</p>
                 <div class="loading-steps">
                     <div class="step active">🔄 Re-analyzing photos</div>
-                    <div class="step">🎨 Updating colors & patterns</div>
-                    <div class="step">👗 Refining style preferences</div>
-                    <div class="step">✨ Generating new profile</div>
+                    <div class="step">🎨 Reassessing coloring & undertones</div>
+                    <div class="step">👗 Updating flattering styles</div>
+                    <div class="step">✨ Generating new recommendations</div>
                 </div>
             </div>
         `;
@@ -825,7 +836,7 @@ async function regenerateStyleProfile() {
         if (analysisResult.success) {
             // Display the new analysis results
             displayStyleProfile(analysisResult.profile);
-            showNotification(`Style profile regenerated from ${photos.length} photos!`, 'success');
+            showNotification(`Style recommendations regenerated! Fresh analysis based on your features.`, 'success');
             
             // Save the new profile
             await chrome.storage.local.set({ styleProfile: analysisResult.profile });
@@ -876,15 +887,15 @@ async function updateAnalyzeButton() {
     // Check if elements exist before modifying them
     if (analyzeBtn) {
         analyzeBtn.disabled = photos.length === 0;
-        
+
         if (photos.length > 0) {
             if (hasExistingProfile) {
-                analyzeBtn.textContent = `Re-analyze My Style (${photos.length} photos)`;
+                analyzeBtn.textContent = `Re-analyze My Features (${photos.length} photos)`;
             } else {
-                analyzeBtn.textContent = `Analyze My Style (${photos.length} photos)`;
+                analyzeBtn.textContent = `Analyze My Features (${photos.length} photos)`;
             }
         } else {
-            analyzeBtn.textContent = hasExistingProfile ? 'Re-analyze My Style' : 'Analyze My Style';
+            analyzeBtn.textContent = hasExistingProfile ? 'Re-analyze My Features' : 'Analyze My Features';
         }
     }
     
@@ -923,13 +934,13 @@ async function analyzeStyle() {
     analysisContent.innerHTML = `
         <div class="analysis-loading">
             <div class="loading-spinner"></div>
-            <h3>Analyzing Your Style...</h3>
-            <p>AI is examining your photos to create your personalized style profile</p>
+            <h3>Analyzing Your Features...</h3>
+            <p>AI is examining your photos to determine what would look best on you</p>
             <div class="loading-steps">
                 <div class="step active">📸 Processing photos</div>
-                <div class="step">🎨 Analyzing colors & patterns</div>
-                <div class="step">👗 Determining style preferences</div>
-                <div class="step">✨ Creating your profile</div>
+                <div class="step">🎨 Analyzing coloring & undertones</div>
+                <div class="step">👗 Determining flattering styles</div>
+                <div class="step">✨ Creating your personalized recommendations</div>
             </div>
         </div>
     `;
@@ -949,7 +960,7 @@ async function analyzeStyle() {
         if (analysisResult.success) {
             // Display the analysis results
             displayStyleProfile(analysisResult.profile);
-            showNotification(`Style analysis complete! Generated profile from ${photos.length} photos.`, 'success');
+            showNotification(`Feature analysis complete! Here's what would look best on you.`, 'success');
             
             // Save the profile
             await chrome.storage.local.set({ styleProfile: analysisResult.profile });
@@ -988,7 +999,7 @@ async function analyzeStyle() {
         // Reset button
         if (analyzeBtn) {
             analyzeBtn.disabled = false;
-            analyzeBtn.textContent = 'Re-analyze Style';
+            analyzeBtn.textContent = 'Re-analyze Features';
         }
     }
 }

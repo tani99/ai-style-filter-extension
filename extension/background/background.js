@@ -553,62 +553,66 @@ async function analyzeStyleProfileWithImages(photoDataUrls, photoCount, options 
 
         console.log(`[Background] Successfully converted ${photoBlobs.length} photos to blobs`);
 
-        // Create the style analysis prompt
-        const prompt = `You are an expert fashion stylist and personal style consultant. I have uploaded ${photoBlobs.length} photos showing different outfits. Please analyze the ACTUAL IMAGES provided and create a comprehensive personal style profile based on what you SEE.
+        // Create the style analysis prompt - PERSON-BASED (analyzes features, not current clothing)
+        const prompt = `You are an expert fashion stylist and personal style consultant. I have uploaded ${photoBlobs.length} photos of a person. Please analyze the PERSON in these images - their physical features, coloring, and proportions - to create recommendations for what would look most flattering on them.
 
-IMPORTANT INSTRUCTIONS:
-1. Look carefully at each image and analyze the clothing, colors, patterns, and overall style visible in the photos
-2. Base your analysis on the VISUAL CONTENT of the images, not assumptions
-3. Identify specific colors, patterns, silhouettes, and style elements you can see
-4. Respond with ONLY a valid JSON object in the exact format specified below. Do not include any markdown formatting, explanations, or text outside the JSON.
+CRITICAL INSTRUCTIONS:
+1. Analyze the PERSON in the photos, NOT their current clothing choices
+2. Focus on: skin tone, undertones (warm/cool/neutral), hair color, eye color, body proportions, height indicators, frame, facial features
+3. Recommend colors, styles, and silhouettes that would be FLATTERING based on their coloring and body type
+4. Base recommendations on color theory (which colors complement their skin tone) and body proportion principles
+5. Respond with ONLY a valid JSON object in the exact format specified below. Do not include any markdown formatting, explanations, or text outside the JSON.
 
-Based on analyzing the ${photoBlobs.length} images provided, create a detailed style profile:
+Your task: Analyze the person's features and create a profile of what would look BEST on them.
 
 {
-  "analysis_summary": "Brief overview of the style analysis based on what you see in the images",
+  "analysis_summary": "Brief overview of the person's coloring, body type, and key features observed",
   "color_palette": {
-    "best_colors": ["colors you see frequently in the images"],
-    "color_reasoning": "Why these colors appear to work well based on the images",
-    "avoid_colors": ["colors that don't appear or might not suit based on what you see"]
+    "best_colors": ["colors that complement their skin tone and undertones - be specific about WHY these colors work"],
+    "color_reasoning": "Explanation based on their skin tone, undertones (warm/cool/neutral), hair color, and coloring. Reference color theory principles.",
+    "avoid_colors": ["colors that may wash them out or clash with their coloring"]
   },
   "style_categories": [
     {
-      "name": "Primary style category based on visible clothing",
+      "name": "Primary recommended style category that would flatter their features",
       "confidence": "high/medium/low",
-      "description": "Why this style category fits based on what you observe"
+      "description": "Why this style would work well for their body type and proportions"
     },
     {
-      "name": "Secondary style category",
+      "name": "Secondary style category that would suit them",
       "confidence": "high/medium/low",
-      "description": "Additional style observed in the images"
+      "description": "Additional style that complements their features"
     },
     {
-      "name": "Tertiary style category",
+      "name": "Tertiary style option",
       "confidence": "high/medium/low",
-      "description": "Third style option visible"
+      "description": "Third style that could work"
     }
   ],
   "body_type_analysis": {
-    "silhouettes": ["silhouettes you observe in the images"],
-    "fits": ["fit styles visible in the clothing"],
-    "recommendations": "Specific fit and silhouette advice based on what you see working well"
+    "observed_features": ["specific observations about their body proportions, frame, height indicators"],
+    "silhouettes": ["silhouettes that would flatter their body type - e.g., A-line, straight, fitted, etc."],
+    "fits": ["fit styles that would work best - e.g., tailored, relaxed, structured"],
+    "recommendations": "Detailed advice on cuts, proportions, and silhouettes that would be most flattering based on their body type. Explain WHY these work."
   },
   "pattern_preferences": {
-    "recommended_patterns": ["patterns you see in the images"],
-    "pattern_reasoning": "Why these patterns work based on observations",
-    "avoid_patterns": ["patterns to avoid or not seen"]
+    "recommended_patterns": ["patterns that would work with their features and proportions"],
+    "pattern_reasoning": "Why these patterns would be flattering (consider scale, visual weight, body proportions)",
+    "avoid_patterns": ["patterns that might overwhelm or not suit their frame"]
   },
   "overall_aesthetic": {
-    "keywords": ["keywords describing the overall aesthetic you observe"],
-    "description": "Complete aesthetic summary based on visual analysis",
-    "style_personality": "Style personality based on the images"
+    "keywords": ["keywords describing aesthetics that would suit their features and coloring"],
+    "description": "Overall aesthetic direction that would enhance their natural features",
+    "style_personality": "Style personality recommendations based on their features"
   },
   "shopping_recommendations": {
-    "key_pieces": ["pieces that would complement the observed style"],
-    "brands_to_consider": ["brand suggestions based on the style observed"],
-    "style_tips": ["tips based on what works in the images"]
+    "key_pieces": ["specific pieces that would be flattering for their body type and coloring"],
+    "brands_to_consider": ["brands that cater to their style needs and body type"],
+    "style_tips": ["actionable styling tips based on their specific features - e.g., 'Draw attention to X', 'Balance proportions by Y', 'Highlight your Z'"]
   }
 }
+
+REMEMBER: Focus on what would be FLATTERING for this person based on their features, NOT what they're currently wearing. This is about helping them discover what looks best on them.
 
 Respond with ONLY the JSON object, no additional text or formatting.`;
 

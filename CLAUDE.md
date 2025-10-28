@@ -26,8 +26,8 @@ The extension uses a multi-layered AI detection system:
 
 ### Data Flow
 
-1. User uploads photos via extension tab → stored in `chrome.storage.local`
-2. Chrome AI analyzes photos → generates style profile with confidence scores
+1. User uploads photos of themselves via extension tab → stored in `chrome.storage.local`
+2. Chrome AI analyzes the person's features (skin tone, body type, coloring) → generates personalized recommendations for what would look flattering
 3. Content script detects current e-commerce site → applies site-specific selectors
 4. AI-powered product detection runs on page images → visual indicators added
 5. Background service worker coordinates between components
@@ -78,7 +78,7 @@ Unlike traditional keyword-based detection, the system uses Chrome's built-in AI
 Product images are marked with positioned overlay elements (not CSS box-shadows) to avoid cropping issues. Overlays use absolute positioning and update on scroll/resize events.
 
 ### Style Profile Persistence
-User photos and generated style profiles persist across browser sessions using `chrome.storage.local`. The style analysis generates categories with confidence scores and color palettes.
+User photos and generated style recommendations persist across browser sessions using `chrome.storage.local`. The style analysis is PERSON-BASED: it analyzes the user's physical features (skin tone, undertones, body proportions, coloring) to recommend what would be most flattering, rather than analyzing their current clothing choices. This creates a profile of what would look BEST on them based on color theory and body proportion principles.
 
 ## File Structure Context
 
@@ -143,11 +143,36 @@ The modular content script architecture includes:
 ### Storage Schema
 ```javascript
 {
-  userPhotos: [],           // Base64 encoded uploaded photos
-  styleProfile: {           // AI-generated style analysis
-    categories: [...],      // Style categories with confidence
-    colors: [...],          // Dominant color palette
-    reasoning: "..."        // AI explanation
+  userPhotos: [],           // Base64 encoded uploaded photos of the user
+  styleProfile: {           // AI-generated PERSON-BASED style recommendations
+    analysis_summary: "...",           // Overview of person's features and coloring
+    color_palette: {
+      best_colors: [...],              // Colors that flatter their skin tone/undertones
+      color_reasoning: "...",          // Why these colors work (color theory)
+      avoid_colors: [...]              // Colors that may wash them out
+    },
+    style_categories: [...],           // Style categories that would suit their features
+    body_type_analysis: {
+      observed_features: [...],        // Body proportions, frame, height indicators
+      silhouettes: [...],              // Flattering silhouettes for their body type
+      fits: [...],                     // Best fit styles (tailored, relaxed, etc.)
+      recommendations: "..."           // Detailed styling advice based on their proportions
+    },
+    pattern_preferences: {
+      recommended_patterns: [...],     // Patterns that work with their features
+      pattern_reasoning: "...",        // Why these patterns are flattering
+      avoid_patterns: [...]            // Patterns that might overwhelm
+    },
+    overall_aesthetic: {
+      keywords: [...],                 // Aesthetic keywords that suit them
+      description: "...",              // Overall aesthetic recommendations
+      style_personality: "..."         // Style personality based on features
+    },
+    shopping_recommendations: {
+      key_pieces: [...],               // Pieces flattering for their body/coloring
+      brands_to_consider: [...],       // Brand suggestions
+      style_tips: [...]                // Actionable styling tips for their features
+    }
   },
   firstInstall: boolean
 }
