@@ -303,16 +303,13 @@ export class EventListeners {
                 }
             });
 
-            // Re-run detection if new images found
-            if (hasNewImages) {
-                console.log('🖼️ New images detected, checking for new products...');
-                setTimeout(async () => {
-                    // KEEP: Image detection (adds green borders)
-                    // REMOVED: Analysis trigger - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
-                    // TODO: New analysis queue will handle lazy-loaded images
-                    await this.contentScript.detectNewImages();
-                }, 500);
-            }
+            // REMOVED: Lazy loading detection disabled
+            // if (hasNewImages) {
+            //     console.log('🖼️ New images detected, checking for new products...');
+            //     setTimeout(async () => {
+            //         await this.contentScript.detectNewImages();
+            //     }, 500);
+            // }
         });
 
         // Start observing
@@ -332,15 +329,13 @@ export class EventListeners {
                     !entry.target.dataset.clothingItemDetected  // undefined = not yet analyzed
                 );
 
-                if (hasNewVisibleImages) {
-                    console.log('👁️ New images scrolled into view, checking for products...');
-                    setTimeout(async () => {
-                        // KEEP: Image detection (adds green borders)
-                        // REMOVED: Analysis trigger - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
-                        // TODO: New analysis queue will handle viewport images
-                        await this.contentScript.detectNewImages();
-                    }, 1000);
-                }
+                // REMOVED: Lazy loading detection disabled
+                // if (hasNewVisibleImages) {
+                //     console.log('👁️ New images scrolled into view, checking for products...');
+                //     setTimeout(async () => {
+                //         await this.contentScript.detectNewImages();
+                //     }, 1000);
+                // }
             });
 
             // Observe all images

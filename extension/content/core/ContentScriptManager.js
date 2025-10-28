@@ -320,40 +320,7 @@ export class ContentScriptManager {
         console.log('═'.repeat(80) + '\n');
     }
 
-    /**
-     * Detect new images (for dynamic content)
-     * Also triggers scoring for newly detected images
-     * @returns {Promise<Object>} Detection results for new images
-     */
-    async detectNewImages() {
-        if (!this.currentSite) return { detectedImages: [], rejectedImages: [] };
-
-        const results = await this.imageDetector.detectNewImages();
-
-        if (results.detectedImages.length > 0) {
-            console.log(`🆕 Found ${results.detectedImages.length} new clothing items via lazy loading`);
-
-            // Get the current count before adding new products (for proper indexing)
-            const startIndex = this.detectedProducts.length;
-
-            // Add visual indicators (green borders)
-            this.visualIndicators.addVisualIndicators(results.detectedImages, results.rejectedImages, startIndex);
-
-            // Add to detected products list
-            this.detectedProducts.push(...results.detectedImages);
-
-            // Print summary table for new images
-            this.printImageDetectionSummary(results.detectedImages, results.rejectedImages);
-
-            // REMOVED: Analysis trigger for lazy-loaded images - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
-            // if (this.styleProfile) {
-            //     await this.analyzeNewProducts(results.detectedImages, startIndex);
-            // }
-            // TODO: New analysis queue will handle lazy-loaded images
-        }
-
-        return results;
-    }
+    // REMOVED: detectNewImages method - lazy loading detection disabled
 
     // REMOVED: analyzeNewProducts method - See IMAGE_ANALYSIS_REFACTOR_PLAN.md
     // This method also used Promise.all() for concurrent analysis without rate limiting
