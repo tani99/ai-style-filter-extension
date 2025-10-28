@@ -469,14 +469,15 @@ export class ContentScriptManager {
      */
     clearProductDetection() {
         this.visualIndicators.clearProductDetection();
+        this.scoreBadgeManager.hideAllBadges(); // Clear score badges
         this.detectedProducts = [];
         this.processedImages.clear();
         this.lastDetectionResults = null;
         this.clearProductAnalysis(); // Also clear analysis data
-        
+
         // Stop background task when clearing detection
         this.stopBackgroundTask();
-        
+
         console.log('🧹 Product detection cleared');
     }
 
@@ -697,8 +698,14 @@ export class ContentScriptManager {
                 // Check for images that need style analysis (non-blocking)
                 this.runBackgroundAnalysis();
 
-                // Print summary table with image src column
+                // Print summary table with updated analysis status
                 this.printImageDetectionSummary(this.detectedProducts, []);
+
+                // Log badge status
+                if (this.isStyleModeOn) {
+                    const badgeCount = this.scoreBadgeManager.activeBadges.size;
+                    console.log(`🎨 Style mode ON - ${badgeCount} badges currently displayed`);
+                }
             } else {
                 console.log('📸 No detected images found');
             }
@@ -760,7 +767,23 @@ export class ContentScriptManager {
                 // Mark as complete
                 item.analysisStatus = 'complete';
 
-                console.log(`✅ Analyzed: ${item.imageInfo?.alt || 'no alt'} - Score: ${result.score}/10`);
+                // Store score in DOM data attributes (for persistence)
+                this.scoreBadgeManager.storeScore(
+                    imgElement,
+                    result.score,
+                    result.reasoning || result.reason
+                );
+
+                // If style mode is ON, render badge immediately (progressive rendering)
+                if (this.isStyleModeOn) {
+                    this.scoreBadgeManager.renderBadge(
+                        imgElement,
+                        result.score,
+                        result.reasoning || result.reason
+                    );
+                }
+
+                console.log(`✅ Analysis complete for "${item.imageInfo?.alt || 'no alt'}" - Score: ${result.score}/10`);
             }).catch(error => {
                 console.error(`❌ Analysis failed for image: ${item.imageInfo?.alt || 'no alt'}`, error);
                 // Reset to not_started so it can be retried

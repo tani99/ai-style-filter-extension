@@ -186,12 +186,6 @@ export class BaseProductMatcher {
      * @returns {Promise<Object>} Analysis result
      */
     async analyze(productImage, options = {}) {
-        console.log('🔍 analyze called for:', {
-            alt: productImage.alt,
-            options: options,
-            src: productImage.src.substring(0, 60) + '...'
-        });
-
         if (!this.isInitialized) {
             console.log('⚠️ Analyzer not initialized, initializing now...');
             const initialized = await this.initialize();
@@ -212,25 +206,21 @@ export class BaseProductMatcher {
                 this.analysisCache.delete(cacheKey);
                 // Continue to perform new analysis below
             } else {
-                console.log('📦 Using cached analysis for product:', cached);
                 return { ...cached, cached: true };
             }
         }
 
         // Check if this product is already being analyzed
         if (this.pendingAnalyses.has(cacheKey)) {
-            console.log('⏳ Analysis already in progress, waiting...');
             return await this.pendingAnalyses.get(cacheKey);
         }
 
         // Create promise for this analysis (using child's implementation)
-        console.log('🚀 Starting new analysis for product');
         const analysisPromise = this._performAnalysis(productImage, options, cacheKey);
         this.pendingAnalyses.set(cacheKey, analysisPromise);
 
         try {
             const result = await analysisPromise;
-            console.log('✅ Analysis complete:', result);
             return result;
         } finally {
             this.pendingAnalyses.delete(cacheKey);
@@ -357,42 +347,29 @@ export class BaseProductMatcher {
      * @private
      */
     async _performAnalysis(productImage, options, cacheKey) {
-        console.log('📝 _performAnalysis started');
-
         try {
             // Build analysis prompt (using child's implementation)
-            console.log('🔨 Building analysis prompt...');
             const prompt = await this.buildPrompt(productImage, options);
-            console.log('📄 Prompt built (length: ' + prompt.length + ' chars)');
-            console.log('📄 Full prompt:\n', prompt);
 
             // Create AI session (using official Prompt API)
-            console.log('🤖 Creating LanguageModel session for this analysis...');
             const session = await window.LanguageModel.create({
                 temperature: 0.1,
                 topK: 5,
                 outputLanguage: 'en'
             });
-            console.log('✅ LanguageModel session created');
 
             // Get AI response
-            console.log('🤖 Sending prompt to session...');
             const response = await session.prompt(prompt);
-            console.log('🤖 Response received:', response);
 
             // Clean up session
             session.destroy();
-            console.log('🗑️ Session destroyed');
 
             // Parse response (using child's implementation)
-            console.log('🔍 Parsing AI response...');
             const result = this.parseAnalysisResponse(response);
-            console.log('✅ Parsed result:', result);
 
             // Cache the result
             this.cacheResult(cacheKey, result);
 
-            console.log(`✅ Analysis complete: ${JSON.stringify(result)}`);
             return result;
 
         } catch (error) {
@@ -506,30 +483,23 @@ export class BaseProductMatcher {
 
             // Build prompt
             const prompt = buildOutfitDescriptionPrompt({ altText, imageContext });
-            console.log('📄 Description prompt built (length: ' + prompt.length + ' chars)');
 
             // Create AI session
-            console.log('🤖 Creating LanguageModel session for description...');
             const session = await window.LanguageModel.create({
                 temperature: 0.7,  // Higher temperature for more creative descriptions
                 topK: 20,
                 outputLanguage: 'en'
             });
-            console.log('✅ LanguageModel session created');
 
             // Get AI response
-            console.log('🤖 Generating outfit description...');
             const description = await session.prompt(prompt);
-            console.log('✅ Description received:', description.substring(0, 100) + '...');
 
             // Clean up session
             session.destroy();
-            console.log('🗑️ Session destroyed');
 
             // Clean up the description (remove any extra formatting)
             const cleanDescription = description.trim();
 
-            console.log('✅ Outfit description generated successfully');
             return cleanDescription;
 
         } catch (error) {
