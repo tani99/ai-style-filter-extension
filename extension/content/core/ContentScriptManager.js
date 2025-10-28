@@ -247,8 +247,12 @@ export class ContentScriptManager {
                 this.debugInterface.logDetectionResults(results.detectedImages, results.rejectedImages);
             }
 
-            // Store results
-            this.detectedProducts = results.detectedImages;
+            // Store results and initialize analysis status
+            this.detectedProducts = results.detectedImages.map(item => ({
+                ...item,
+                analysisStatus: 'not_started', // Track: 'not_started' | 'in_progress' | 'complete'
+                styleAnalysis: null // Will store: { score, reason, description }
+            }));
             this.lastDetectionResults = {
                 detected: results.detectedImages.length,
                 rejected: results.rejectedImages.length,
@@ -293,41 +297,85 @@ export class ContentScriptManager {
      * @private
      */
     printImageDetectionSummary(detectedImages, rejectedImages) {
-        console.log('\n📊 IMAGE DETECTION SUMMARY');
-        console.log('═'.repeat(100));
-        
-        // Header with src column
-        console.log('│ Index │ Alt Text                    │ Indicator │ Status    │ Image Src');
-        console.log('├───────┼─────────────────────────────┼───────────┼───────────┼─────────────────────────────────────┤');
-        
+        console.log('\n📊 IMAGE DETECTION & ANALYSIS SUMMARY');
+        console.log('═'.repeat(180));
+
+        // Header with analysis columns
+        console.log('│ # │ Alt Text              │ Status   │ Analysis    │ Score │ Reason                           │ Description                      │ Src');
+        console.log('├───┼───────────────────────┼──────────┼─────────────┼───────┼──────────────────────────────────┼──────────────────────────────────┼─────────────────────────┤');
+
         // Process detected images
         detectedImages.forEach((item, index) => {
-            const altText = item.imageInfo?.alt || 'No alt text';
-            const truncatedAlt = altText.length > 25 ? altText.substring(0, 22) + '...' : altText.padEnd(25);
-            const indicatorStatus = '✅ Added';
+            const altText = item.imageInfo?.alt || 'No alt';
+            const truncatedAlt = altText.length > 20 ? altText.substring(0, 17) + '...' : altText.padEnd(20);
+
             const status = 'Detected';
+
+            // Analysis status
+            const analysisStatus = item.analysisStatus || 'not_started';
+            let analysisDisplay = '';
+            switch(analysisStatus) {
+                case 'not_started':
+                    analysisDisplay = '⏸️  Pending';
+                    break;
+                case 'in_progress':
+                    analysisDisplay = '⏳ Running';
+                    break;
+                case 'complete':
+                    analysisDisplay = '✅ Complete';
+                    break;
+                default:
+                    analysisDisplay = analysisStatus;
+            }
+            analysisDisplay = analysisDisplay.padEnd(11);
+
+            // Score
+            const score = item.styleAnalysis?.score || '-';
+            const scoreDisplay = (score !== '-' ? `${score}/10` : '-').padEnd(5);
+
+            // Reason
+            const reason = item.styleAnalysis?.reason || '-';
+            const truncatedReason = reason.length > 32 ? reason.substring(0, 29) + '...' : reason.padEnd(32);
+
+            // Description
+            const description = item.styleAnalysis?.description || '-';
+            const truncatedDescription = description.length > 32 ? description.substring(0, 29) + '...' : description.padEnd(32);
+
+            // Src
             const src = item.imageInfo?.src || item.element?.src || 'No src';
-            const truncatedSrc = src.length > 35 ? src.substring(0, 32) + '...' : src.padEnd(35);
-            
-            console.log(`│ ${(index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │ ${truncatedSrc} │`);
+            const truncatedSrc = src.length > 23 ? src.substring(0, 20) + '...' : src.padEnd(23);
+
+            console.log(`│ ${(index + 1).toString().padStart(2)} │ ${truncatedAlt} │ ${status.padEnd(8)} │ ${analysisDisplay} │ ${scoreDisplay} │ ${truncatedReason} │ ${truncatedDescription} │ ${truncatedSrc} │`);
         });
-        
+
         // Process rejected images (if any)
         rejectedImages.forEach((item, index) => {
-            const altText = item.imageInfo?.alt || 'No alt text';
-            const truncatedAlt = altText.length > 25 ? altText.substring(0, 22) + '...' : altText.padEnd(25);
-            const indicatorStatus = '❌ None';
+            const altText = item.imageInfo?.alt || 'No alt';
+            const truncatedAlt = altText.length > 20 ? altText.substring(0, 17) + '...' : altText.padEnd(20);
+
             const status = 'Rejected';
+            const analysisDisplay = 'N/A'.padEnd(11);
+            const scoreDisplay = '-'.padEnd(5);
+            const truncatedReason = '-'.padEnd(32);
+            const truncatedDescription = '-'.padEnd(32);
+
             const src = item.imageInfo?.src || item.element?.src || 'No src';
-            const truncatedSrc = src.length > 35 ? src.substring(0, 32) + '...' : src.padEnd(35);
-            
-            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(5)} │ ${truncatedAlt} │ ${indicatorStatus.padEnd(9)} │ ${status.padEnd(9)} │ ${truncatedSrc} │`);
+            const truncatedSrc = src.length > 23 ? src.substring(0, 20) + '...' : src.padEnd(23);
+
+            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(2)} │ ${truncatedAlt} │ ${status.padEnd(8)} │ ${analysisDisplay} │ ${scoreDisplay} │ ${truncatedReason} │ ${truncatedDescription} │ ${truncatedSrc} │`);
         });
-        
+
         // Footer
-        console.log('└───────┴─────────────────────────────┴───────────┴───────────┴─────────────────────────────────────┘');
-        console.log(`📈 Total: ${detectedImages.length} detected, ${rejectedImages.length} rejected`);
-        console.log('═'.repeat(100) + '\n');
+        console.log('└───┴───────────────────────┴──────────┴─────────────┴───────┴──────────────────────────────────┴──────────────────────────────────┴─────────────────────────┘');
+
+        // Summary statistics
+        const analyzedCount = detectedImages.filter(item => item.analysisStatus === 'complete').length;
+        const pendingCount = detectedImages.filter(item => item.analysisStatus === 'not_started').length;
+        const inProgressCount = detectedImages.filter(item => item.analysisStatus === 'in_progress').length;
+
+        console.log(`📈 Detection: ${detectedImages.length} detected, ${rejectedImages.length} rejected`);
+        console.log(`🎨 Analysis: ${analyzedCount} complete, ${inProgressCount} in progress, ${pendingCount} pending`);
+        console.log('═'.repeat(180) + '\n');
     }
 
     // REMOVED: detectNewImages method - lazy loading detection disabled
@@ -646,12 +694,81 @@ export class ContentScriptManager {
                     console.log(`✅ Updated ${updatedCount} images with new src attributes`);
                 }
 
+                // Check for images that need style analysis (non-blocking)
+                this.runBackgroundAnalysis();
+
                 // Print summary table with image src column
                 this.printImageDetectionSummary(this.detectedProducts, []);
             } else {
                 console.log('📸 No detected images found');
             }
         }, 5000); // 5 seconds
+    }
+
+    /**
+     * Run style analysis on images that are ready (fire-and-forget)
+     * Triggers analyses without waiting for results
+     * @private
+     */
+    runBackgroundAnalysis() {
+        // Check if we have a style profile to analyze against
+        if (!this.styleProfile) {
+            return; // Skip analysis if no style profile
+        }
+
+        // Find images that need analysis
+        const imagesToAnalyze = this.detectedProducts.filter(item => {
+            const src = item.imageInfo?.src || '';
+            const needsAnalysis = item.analysisStatus === 'not_started';
+            const hasValidSrc = src.startsWith('http');
+
+            return needsAnalysis && hasValidSrc;
+        });
+
+        if (imagesToAnalyze.length === 0) {
+            return; // No images need analysis
+        }
+
+        console.log(`🎨 Triggering style analysis for ${imagesToAnalyze.length} images...`);
+
+        // Fire off all analyses without waiting (concurrent execution)
+        imagesToAnalyze.forEach(item => {
+            // Mark as in progress immediately
+            item.analysisStatus = 'in_progress';
+
+            // Get the DOM element for analysis
+            const imgElement = item.element;
+
+            if (!imgElement || !imgElement.complete) {
+                console.log(`⚠️ Image not ready for analysis: ${item.imageInfo?.alt || 'no alt'}`);
+                item.analysisStatus = 'not_started'; // Reset to retry later
+                return;
+            }
+
+            // Fire off analysis (don't await - let it run in background)
+            this.personalStyleMatcher.analyzeProduct(
+                imgElement,
+                this.styleProfile
+            ).then(result => {
+                // Store the analysis results when complete
+                item.styleAnalysis = {
+                    score: result.score,
+                    reason: result.reasoning || result.reason,
+                    description: result.description || null
+                };
+
+                // Mark as complete
+                item.analysisStatus = 'complete';
+
+                console.log(`✅ Analyzed: ${item.imageInfo?.alt || 'no alt'} - Score: ${result.score}/10`);
+            }).catch(error => {
+                console.error(`❌ Analysis failed for image: ${item.imageInfo?.alt || 'no alt'}`, error);
+                // Reset to not_started so it can be retried
+                item.analysisStatus = 'not_started';
+            });
+        });
+
+        console.log(`🎨 ${imagesToAnalyze.length} analyses triggered (running in background)`);
     }
 
     /**
