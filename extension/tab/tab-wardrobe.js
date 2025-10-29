@@ -198,7 +198,7 @@ async function loadWardrobeData() {
       console.log(`📊 Wardrobe contains: ${itemCount} items, ${lookCount} looks`);
       
       updateWardrobeStats(cachedResponse.data);
-      displayAllItems(cachedResponse.data.items);
+      displayCategoryItems(cachedResponse.data.items);
 
       // Show helpful message if no data
       if (itemCount === 0 && lookCount === 0) {
@@ -217,24 +217,27 @@ function updateWardrobeStats(data) {
 
  
 
-function displayAllItems(items) {
-  const grid = document.getElementById('allItemsGrid');
+function displayCategoryItems(items) {
+  const topsGrid = document.getElementById('topsGrid');
+  const bottomsGrid = document.getElementById('bottomsGrid');
+  const shoesGrid = document.getElementById('shoesGrid');
 
-  if (!grid) return;
+  if (!topsGrid || !bottomsGrid || !shoesGrid) return;
 
-  if (!items || items.length === 0) {
-    grid.innerHTML = '<p style="text-align: center; color: #6b7280;">No items in wardrobe yet</p>';
-    return;
-  }
+  const normalizeCategory = (item) => {
+    const raw = (item.category || item.type || item.category_name || '').toString().toLowerCase();
+    if (!raw) return 'other';
+    if (/(^|\b)(top|shirt|tee|t\-?shirt|blouse|sweater|hoodie|jacket|coat|cardigan)s?(\b|$)/.test(raw)) return 'tops';
+    if (/(^|\b)(bottom|pant|trouser|jean|short|skirt|legging)s?(\b|$)/.test(raw)) return 'bottoms';
+    if (/(^|\b)(shoe|sneaker|boot|heel|flat|sandal|loafer)s?(\b|$)/.test(raw)) return 'shoes';
+    return 'other';
+  };
 
-  grid.innerHTML = items.map(item => {
+  const toCard = (item) => {
     const hasAnalysis = item.aiAnalysis && typeof item.aiAnalysis === 'object';
-
     return `
       <div class="wardrobe-item-card">
-        <img src="${item.thumbnailUrl || item.imageUrl || ''}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23e5e7eb%22 width=%22100%22 height=%22100%22/><text x=%2250%%22 y=%2250%%22 fill=%22%236b7280%22 font-size=%2212%22 text-anchor=%22middle%22 dy=%22.3em%22>No Image</text></svg>'">
-        
-
+        <img src="${item.thumbnailUrl || item.imageUrl || ''}" alt="${item.name || ''}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23e5e7eb%22 width=%22100%22 height=%22100%22/><text x=%2250%%22 y=%2250%%22 fill=%22%236b7280%22 font-size=%2212%22 text-anchor=%22middle%22 dy=%22.3em%22>No Image</text></svg>'">
         ${hasAnalysis ? `
           <details class="item-analysis">
             <summary class="analysis-header">🤖 AI Analysis</summary>
@@ -249,42 +252,36 @@ function displayAllItems(items) {
                   </span>
                 </div>
               ` : ''}
-
               ${item.aiAnalysis.style && item.aiAnalysis.style.length > 0 ? `
                 <div class="analysis-row">
                   <strong>Style:</strong>
                   <span class="analysis-value">${item.aiAnalysis.style.join(', ')}</span>
                 </div>
               ` : ''}
-
               ${item.aiAnalysis.pattern ? `
                 <div class="analysis-row">
                   <strong>Pattern:</strong>
                   <span class="analysis-value">${item.aiAnalysis.pattern}</span>
                 </div>
               ` : ''}
-
               ${item.aiAnalysis.formality ? `
                 <div class="analysis-row">
                   <strong>Formality:</strong>
                   <span class="analysis-value">${item.aiAnalysis.formality}</span>
                 </div>
               ` : ''}
-
               ${item.aiAnalysis.season && item.aiAnalysis.season.length > 0 ? `
                 <div class="analysis-row">
                   <strong>Season:</strong>
                   <span class="analysis-value">${item.aiAnalysis.season.join(', ')}</span>
                 </div>
               ` : ''}
-
               ${item.aiAnalysis.versatility_score !== undefined ? `
                 <div class="analysis-row">
                   <strong>Versatility:</strong>
                   <span class="analysis-value">${item.aiAnalysis.versatility_score}/10</span>
                 </div>
               ` : ''}
-
               ${item.aiAnalysis.description ? `
                 <div class="analysis-row description">
                   <p>${item.aiAnalysis.description}</p>
@@ -299,7 +296,22 @@ function displayAllItems(items) {
         `}
       </div>
     `;
-  }).join('');
+  };
+
+  const tops = [];
+  const bottoms = [];
+  const shoes = [];
+
+  (items || []).forEach(item => {
+    const cat = normalizeCategory(item);
+    if (cat === 'tops') tops.push(item);
+    else if (cat === 'bottoms') bottoms.push(item);
+    else if (cat === 'shoes') shoes.push(item);
+  });
+
+  topsGrid.innerHTML = tops.length ? tops.map(toCard).join('') : '<p style="text-align: center; color: #6b7280;">No tops yet</p>';
+  bottomsGrid.innerHTML = bottoms.length ? bottoms.map(toCard).join('') : '<p style="text-align: center; color: #6b7280;">No bottoms yet</p>';
+  shoesGrid.innerHTML = shoes.length ? shoes.map(toCard).join('') : '<p style="text-align: center; color: #6b7280;">No shoes yet</p>';
 }
 
 // Listen for real-time wardrobe updates
