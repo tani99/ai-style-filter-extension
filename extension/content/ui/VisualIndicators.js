@@ -57,6 +57,10 @@ export class VisualIndicators {
         // Create eye icon overlay for virtual try-on
         const eyeIcon = this.tryOnOverlays.createEyeIconOverlay();
 
+        // Store alt text in eye icon for finding the live image element later
+        const altText = item.imageInfo?.alt || '';
+        eyeIcon.dataset.imageAltText = altText;
+
         // Check if there's cached data and set appropriate initial state
         const hasCachedData = this.tryOnOverlays.getCachedTryonData(eyeIcon);
         if (hasCachedData) {

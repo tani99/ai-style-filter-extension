@@ -53,6 +53,9 @@ export class ContentScriptManager {
         this.globalProgressIndicator = new GlobalProgressIndicator();
         this.debugInterface = new DebugInterface();
 
+        // State tracking
+        this.detectedProducts = [];
+
         // Visual indicators
         this.visualIndicators = new VisualIndicators(false);
 
@@ -62,9 +65,6 @@ export class ContentScriptManager {
 
         // Event management
         this.eventListeners = new EventListeners(this);
-
-        // State tracking
-        this.detectedProducts = [];
         this.processedImages = new Set();
         this.lastDetectionResults = null;
         this.isInitialized = false;

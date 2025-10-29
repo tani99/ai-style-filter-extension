@@ -149,14 +149,35 @@ export class TryOnOverlays {
                 throw new Error('No try-on photo uploaded. Please upload a try-on photo in the extension settings.');
             }
 
+            // Find the current image element by alt text (same pattern as background task)
+            // This ensures we get the latest src from the live DOM element
+            const altText = eyeIcon.dataset.imageAltText;
+            let currentElement = null;
+            let imageSrc = img.src; // Fallback to original img.src
+
+            if (altText && altText !== '(no alt text)') {
+                // Find the image by alt text (safer than querySelector with special characters)
+                const allImages = document.querySelectorAll('img');
+                currentElement = Array.from(allImages).find(img => img.alt === altText);
+
+                if (currentElement) {
+                    imageSrc = currentElement.src;
+                    console.log(`📥 Found current image by alt text "${altText}":`, imageSrc);
+                } else {
+                    console.log(`⚠️ Could not find image with alt text "${altText}", using original img.src`);
+                }
+            } else {
+                console.log('⚠️ No alt text available, using original img.src');
+            }
+
             // Validate that the image src is a valid HTTP/HTTPS URL
-            if (!img.src || !img.src.startsWith('http')) {
-                throw new Error('The image valid src is not available yet. It might be loading, please try again in a bit.');
+            if (!imageSrc || !imageSrc.startsWith('http')) {
+                throw new Error('IMAGE_LOADING|The image is still loading. Please wait a few seconds and try again.');
             }
 
             // Convert the clothing image URL to base64
-            console.log('📥 Fetching clothing image from:', img.src);
-            const clothingImageBase64 = await this.convertImageToBase64(img.src);
+            console.log('📥 Fetching clothing image from:', imageSrc);
+            const clothingImageBase64 = await this.convertImageToBase64(imageSrc);
             console.log('✅ Clothing image converted to base64');
 
             // Send message to background script to generate try-on
@@ -190,8 +211,17 @@ export class TryOnOverlays {
         } catch (error) {
             console.error('Virtual try-on error:', error);
 
+            // Check if this is an IMAGE_LOADING error and show special retry message
+            let errorMessage = error.message;
+            let isRetryableError = false;
+
+            if (error.message.startsWith('IMAGE_LOADING|')) {
+                errorMessage = error.message.split('|')[1]; // Get the user-friendly message
+                isRetryableError = true;
+            }
+
             // Show error overlay
-            const errorOverlay = this.createTryonErrorOverlay(img, error.message);
+            const errorOverlay = this.createTryonErrorOverlay(img, errorMessage, isRetryableError);
             document.body.appendChild(errorOverlay);
 
             // Remove loading overlay
@@ -408,18 +438,23 @@ export class TryOnOverlays {
      * Create error overlay for try-on
      * @param {HTMLImageElement} img - Product image element
      * @param {string} errorMessage - Error message to display
+     * @param {boolean} isRetryableError - Whether this error can be retried
      * @returns {HTMLElement} Error overlay element
      */
-    createTryonErrorOverlay(img, errorMessage) {
+    createTryonErrorOverlay(img, errorMessage, isRetryableError = false) {
         const overlay = document.createElement('div');
         overlay.className = 'ai-style-tryon-overlay';
+
+        // Use different background color for retryable errors (orange/warning vs red/error)
+        const backgroundColor = isRetryableError ? 'rgba(249, 115, 22, 0.95)' : 'rgba(239, 68, 68, 0.9)';
+
         overlay.style.cssText = `
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(239, 68, 68, 0.9);
+            background: ${backgroundColor};
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -431,10 +466,16 @@ export class TryOnOverlays {
             padding: 20px;
         `;
 
+        // Show different icon and title for retryable errors
+        const icon = isRetryableError ? '⏳' : '⚠️';
+        const title = isRetryableError ? 'Please Wait' : 'Try-on Failed';
+        const retryHint = isRetryableError ? '<div style="font-size: 13px; opacity: 0.85; margin-top: 8px;">Click the eye icon again in a few seconds</div>' : '';
+
         overlay.innerHTML = `
-            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-            <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Try-on Failed</div>
+            <div style="font-size: 48px; margin-bottom: 16px;">${icon}</div>
+            <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">${title}</div>
             <div style="font-size: 14px; opacity: 0.9;">${errorMessage}</div>
+            ${retryHint}
         `;
 
         this.positionTryonOverlay(overlay, img);
