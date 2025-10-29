@@ -785,14 +785,15 @@ async function regenerateStyleProfile() {
         
         console.log(`Regenerating style analysis for ${photos.length} photos`);
         
-        // Show regenerating state
+        // Show regenerating state with time estimate
         analysisContent.innerHTML = `
             <div class="analysis-loading">
                 <div class="loading-spinner"></div>
                 <h3>Regenerating Your Style Recommendations...</h3>
                 <p>Creating a fresh analysis of your features from ${photos.length} photo${photos.length > 1 ? 's' : ''}</p>
+                <p style="font-size: 0.9em; color: #667eea; margin-top: 8px;">⏱️ This may take up to 10 minutes</p>
                 <div class="loading-steps">
-                    <div class="step active">🔄 Re-analyzing photos</div>
+                    <div class="step active">📸 Compressing photos for AI analysis</div>
                     <div class="step">🎨 Reassessing coloring & undertones</div>
                     <div class="step">👗 Updating flattering styles</div>
                     <div class="step">✨ Generating new recommendations</div>
@@ -900,14 +901,15 @@ async function analyzeStyle() {
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = 'Analyzing...';
     
-    // Show loading state
+    // Show loading state with realistic time estimate
     analysisContent.innerHTML = `
         <div class="analysis-loading">
             <div class="loading-spinner"></div>
             <h3>Analyzing Your Features...</h3>
             <p>AI is examining your photos to determine what would look best on you</p>
+            <p style="font-size: 0.9em; color: #667eea; margin-top: 8px;">⏱️ This may take up to 10 minutes</p>
             <div class="loading-steps">
-                <div class="step active">📸 Processing photos</div>
+                <div class="step active">📸 Compressing photos for AI analysis</div>
                 <div class="step">🎨 Analyzing coloring & undertones</div>
                 <div class="step">👗 Determining flattering styles</div>
                 <div class="step">✨ Creating your personalized recommendations</div>

@@ -747,14 +747,15 @@ async function analyzeWardrobeStyle() {
   analyzeBtn.disabled = true;
   analyzeBtn.textContent = 'Analyzing...';
   
-  // Show loading state
+  // Show loading state with realistic time estimate
   analysisContent.innerHTML = `
     <div class="analysis-loading">
       <div class="loading-spinner"></div>
       <h3>Analyzing Your Style...</h3>
-      <p>AI is examining your photos to create your personalized style profile. This could take a few minutes — please stay on this page.</p>
+      <p>AI is examining your photos to create your personalized style profile. This may take up to 10 minutes — please stay on this page.</p>
+      <p style="font-size: 0.9em; color: #667eea; margin-top: 8px;">⏱️ This may take up to 10 minutes</p>
       <div class="loading-steps">
-        <div class="step active">📸 Processing photos</div>
+        <div class="step active">📸 Compressing photos for AI analysis</div>
         <div class="step">🎨 Analyzing colors & patterns</div>
         <div class="step">👗 Determining style preferences</div>
         <div class="step">✨ Creating your profile</div>
