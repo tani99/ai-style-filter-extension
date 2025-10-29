@@ -477,13 +477,13 @@ export class TryOnOverlays {
      * @param {HTMLImageElement} img - Image element
      */
     positionEyeIcon(eyeIcon, img) {
-        const rect = img.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-
-        // Position at bottom right corner, slightly outside the image
-        eyeIcon.style.top = `${rect.bottom + scrollTop + 5}px`;
-        eyeIcon.style.left = `${rect.right + scrollLeft - 45}px`;
+        // Position at bottom-right corner, slightly outside the image
+        GeometryUtils.positionElementRelativeToImage(
+            eyeIcon,
+            img,
+            'bottom-right',
+            { x: 45, y: 5 }
+        );
 
         // Fade in animation
         setTimeout(() => {

@@ -92,6 +92,53 @@ export class GeometryUtils {
             right: rect.right + scroll.scrollLeft
         };
     }
+
+    /**
+     * Position an element relative to an image at a specified corner
+     * @param {HTMLElement} element - The element to position
+     * @param {HTMLImageElement} img - The image element to position relative to
+     * @param {string} position - Corner position: 'top-right', 'top-left', 'bottom-right', 'bottom-left'
+     * @param {Object} offset - Offset object { x, y } for fine-tuning position
+     * @param {string} transform - Optional CSS transform to apply (e.g., 'translateX(-100%)')
+     */
+    static positionElementRelativeToImage(element, img, position = 'top-right', offset = { x: 8, y: 8 }, transform = null) {
+        const rect = img.getBoundingClientRect();
+        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+
+        let top, left;
+
+        switch (position) {
+            case 'top-right':
+                top = rect.top + scrollY + offset.y;
+                left = rect.right + scrollX - offset.x;
+                break;
+            case 'bottom-right':
+                top = rect.bottom + scrollY + offset.y;
+                left = rect.right + scrollX - offset.x;
+                break;
+            case 'top-left':
+                top = rect.top + scrollY + offset.y;
+                left = rect.left + scrollX + offset.x;
+                break;
+            case 'bottom-left':
+                top = rect.bottom + scrollY + offset.y;
+                left = rect.left + scrollX + offset.x;
+                break;
+            default:
+                console.warn(`Unknown position: ${position}, defaulting to top-right`);
+                top = rect.top + scrollY + offset.y;
+                left = rect.right + scrollX - offset.x;
+        }
+
+        element.style.position = 'absolute';
+        element.style.top = `${top}px`;
+        element.style.left = `${left}px`;
+
+        if (transform) {
+            element.style.transform = transform;
+        }
+    }
 }
 
 // Also expose on window for backward compatibility
