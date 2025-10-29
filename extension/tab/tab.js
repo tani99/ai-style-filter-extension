@@ -308,7 +308,6 @@ async function loadSavedPhotos() {
     const photos = await getStoredPhotos();
     photos.forEach(photo => displayPhoto(photo));
     updateAnalyzeButton();
-    updateUserPhotoSelect();
 }
 
 async function loadSavedStyleProfile() {
