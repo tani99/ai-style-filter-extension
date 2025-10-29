@@ -752,7 +752,7 @@ async function analyzeWardrobeStyle() {
     <div class="analysis-loading">
       <div class="loading-spinner"></div>
       <h3>Analyzing Your Style...</h3>
-      <p>AI is examining your photos to create your personalized style profile</p>
+      <p>AI is examining your photos to create your personalized style profile. This could take a few minutes — please stay on this page.</p>
       <div class="loading-steps">
         <div class="step active">📸 Processing photos</div>
         <div class="step">🎨 Analyzing colors & patterns</div>
