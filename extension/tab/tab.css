@@ -1173,8 +1173,11 @@ input[type="range"] {
 
 .wardrobe-item-card img {
     width: 100%;
-    height: 120px;
-    object-fit: cover;
+    aspect-ratio: 1;
+    height: auto;
+    object-fit: contain;
+    object-position: center;
+    background: #ffffff;
 }
 
 .item-name {
