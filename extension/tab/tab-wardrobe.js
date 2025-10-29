@@ -536,7 +536,7 @@ async function processWardrobeFiles(files) {
   
   // Check total photo limit
   if (existingPhotos.length + files.length > maxPhotos) {
-    alert(`Maximum ${maxPhotos} photos allowed. You can upload ${maxPhotos - existingPhotos.length} more.`);
+    console.warn(`Maximum ${maxPhotos} photos allowed. You can upload ${maxPhotos - existingPhotos.length} more.`);
     return;
   }
   
@@ -546,37 +546,59 @@ async function processWardrobeFiles(files) {
   for (const file of files) {
     // Validate file type
     if (!allowedTypes.includes(file.type.toLowerCase())) {
-      alert(`${file.name} is not supported. Please use JPG, PNG, or WebP format.`);
+      console.warn(`${file.name} is not supported. Please use JPG, PNG, or WebP format.`);
       errorCount++;
       continue;
     }
     
-    // Validate file size
+    // If file is large, compress like non-logged in flow
     if (file.size > maxSize) {
-      alert(`${file.name} is too large. Maximum size is 5MB.`);
-      errorCount++;
+      try {
+        const compressedDataUrl = await compressImage(file, maxSize);
+        await addWardrobePhoto(compressedDataUrl, file.name);
+        processedCount++;
+      } catch (error) {
+        console.error(`Failed to compress ${file.name}:`, error);
+        errorCount++;
+      }
       continue;
     }
     
-    // Process valid file
+    // Process valid file as-is
     await addWardrobePhoto(file);
     processedCount++;
   }
   
   if (processedCount > 0) {
-    console.log(`✅ Successfully uploaded ${processedCount} photo${processedCount > 1 ? 's' : ''}!`);
+    console.log(`✅ Successfully processed ${processedCount} photo${processedCount > 1 ? 's' : ''}!`);
   }
   
   updateWardrobeAnalyzeButton();
 }
 
-async function addWardrobePhoto(file) {
+async function addWardrobePhoto(fileOrDataUrl, originalName = null) {
   return new Promise((resolve) => {
+    // Support data URL input (from compression) similar to non-logged-in flow
+    if (typeof fileOrDataUrl === 'string') {
+      const photoData = {
+        id: Date.now() + Math.random(),
+        name: originalName || 'compressed_image.jpg',
+        data: fileOrDataUrl,
+        timestamp: Date.now()
+      };
+      saveWardrobePhoto(photoData).then(() => {
+        displayWardrobePhoto(photoData);
+        resolve();
+      });
+      return;
+    }
+
+    // Otherwise treat as File and read as DataURL
     const reader = new FileReader();
     reader.onload = async (e) => {
       const photoData = {
         id: Date.now() + Math.random(),
-        name: file.name,
+        name: fileOrDataUrl.name,
         data: e.target.result,
         timestamp: Date.now()
       };
@@ -585,7 +607,7 @@ async function addWardrobePhoto(file) {
       displayWardrobePhoto(photoData);
       resolve();
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(fileOrDataUrl);
   });
 }
 
