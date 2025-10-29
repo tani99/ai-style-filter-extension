@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Style Dashboard - Virtual Try-On Extension</title>
+    <title>AI Style Dashboard</title>
     <link rel="stylesheet" href="tab.css">
-    <link rel="stylesheet" href="../gemini/gemini-styles.css">
+    
 </head>
 <body>
     <div class="dashboard-container">
@@ -101,69 +101,7 @@
                 </div>
             </section>
 
-            <!-- Virtual Try-On Section -->
-            <section class="tryon-section">
-                <h2>Virtual Try-On (Gemini API)</h2>
-                <div class="tryon-content">
-                    <div class="gemini-status-item">
-                        <label>
-                            <span>Gemini API Status:</span>
-                            <span id="geminiStatus" class="status-indicator">Checking...</span>
-                        </label>
-                    </div>
-
-                    <div class="api-key-setup" id="apiKeySetup" style="display: none;">
-                        <p class="setup-info">Enter your Gemini API key to enable virtual try-on features</p>
-                        <div class="api-key-input-group">
-                            <input type="password" id="geminiAPIKeyInput" placeholder="Enter Gemini API key...">
-                            <button id="saveAPIKeyBtn" class="save-key-btn">Save API Key</button>
-                            <button id="showAPIKeyBtn" class="toggle-visibility-btn">👁️</button>
-                        </div>
-                        <p class="setup-help">
-                            Get your free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
-                        </p>
-                    </div>
-
-                    <!-- Try-On Photo Upload Section -->
-                    <div class="tryon-photo-section" id="tryonPhotoSection" style="display: none;">
-                        <h3>Your Try-On Photo</h3>
-                        <p>Upload a single photo of yourself that will be used for virtual try-on on shopping sites</p>
-
-                        <div class="tryon-photo-upload-area" id="tryonPhotoUploadArea">
-                            <div class="tryon-photo-placeholder" id="tryonPhotoPlaceholder">
-                                <span class="upload-icon">📸</span>
-                                <p>Click to upload your try-on photo</p>
-                                <small>JPG, PNG, WebP (Max 5MB)</small>
-                            </div>
-                            <input type="file" id="tryonPhotoInput" accept="image/jpeg,image/jpg,image/png,image/webp" style="display: none;">
-                        </div>
-
-                        <div class="tryon-photo-preview" id="tryonPhotoPreview" style="display: none;">
-                            <img id="tryonPhotoImage" alt="Your try-on photo" />
-                            <button id="removeTryonPhotoBtn" class="remove-tryon-photo-btn">Remove Photo</button>
-                        </div>
-                    </div>
-
-                    <div class="tryon-test" id="tryonTestSection" style="display: none;">
-                        <h3>Test Virtual Try-On</h3>
-                        <p>Upload a clothing image to test how it would look on you</p>
-                        <div class="tryon-test-inputs">
-                            <div class="tryon-input-item">
-                                <label>Select your photo:</label>
-                                <select id="userPhotoSelect">
-                                    <option value="">Select a photo...</option>
-                                </select>
-                            </div>
-                            <div class="tryon-input-item">
-                                <label>Upload clothing image:</label>
-                                <input type="file" id="clothingImageInput" accept="image/*">
-                            </div>
-                            <button id="testTryOnBtn" class="test-tryon-btn" disabled>Generate Try-On Image</button>
-                        </div>
-                        <div id="tryonResult" class="tryon-result" style="display: none;"></div>
-                    </div>
-                </div>
-            </section>
+            
 
             <!--Settings Section moved to the bottom -->
         </main>
@@ -339,8 +277,7 @@
     <!-- HEIC support temporarily disabled -->
     <!-- <script src="../lib/heic2any.min.js"></script> -->
 
-    <!-- Gemini API UI Module (Virtual Try-On) -->
-    <script src="../gemini/gemini-ui.js"></script>
+    
 
     <!-- Main Tab Script -->
     <script src="tab.js"></script>
