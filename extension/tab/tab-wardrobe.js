@@ -199,6 +199,7 @@ async function loadWardrobeData() {
       
       updateWardrobeStats(cachedResponse.data);
       displayRecentItems(cachedResponse.data.items);
+      displayAllItems(cachedResponse.data.items);
 
       // Show helpful message if no data
       if (itemCount === 0 && lookCount === 0) {
@@ -291,6 +292,91 @@ function displayRecentItems(items) {
               ` : ''}
             </div>
           </div>
+        ` : `
+          <div class="item-analysis no-analysis">
+            <span class="analysis-pending">⏳ Analysis pending...</span>
+          </div>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
+function displayAllItems(items) {
+  const grid = document.getElementById('allItemsGrid');
+
+  if (!grid) return;
+
+  if (!items || items.length === 0) {
+    grid.innerHTML = '<p style="text-align: center; color: #6b7280;">No items in wardrobe yet</p>';
+    return;
+  }
+
+  grid.innerHTML = items.map(item => {
+    const hasAnalysis = item.aiAnalysis && typeof item.aiAnalysis === 'object';
+
+    return `
+      <div class="wardrobe-item-card">
+        <img src="${item.thumbnailUrl || item.imageUrl || ''}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23e5e7eb%22 width=%22100%22 height=%22100%22/><text x=%2250%%22 y=%2250%%22 fill=%22%236b7280%22 font-size=%2212%22 text-anchor=%22middle%22 dy=%22.3em%22>No Image</text></svg>'">
+        <span class="item-name">${item.name}</span>
+
+        ${hasAnalysis ? `
+          <details class="item-analysis">
+            <summary class="analysis-header">🤖 AI Analysis</summary>
+            <div class="analysis-details">
+              ${item.aiAnalysis.colors && typeof item.aiAnalysis.colors === 'object' ? `
+                <div class="analysis-row">
+                  <strong>Colors:</strong>
+                  <span class="analysis-value">
+                    ${item.aiAnalysis.colors.primary || 'unknown'}
+                    ${item.aiAnalysis.colors.secondary ? `, ${item.aiAnalysis.colors.secondary}` : ''}
+                    ${item.aiAnalysis.colors.tertiary ? `, ${item.aiAnalysis.colors.tertiary}` : ''}
+                  </span>
+                </div>
+              ` : ''}
+
+              ${item.aiAnalysis.style && item.aiAnalysis.style.length > 0 ? `
+                <div class="analysis-row">
+                  <strong>Style:</strong>
+                  <span class="analysis-value">${item.aiAnalysis.style.join(', ')}</span>
+                </div>
+              ` : ''}
+
+              ${item.aiAnalysis.pattern ? `
+                <div class="analysis-row">
+                  <strong>Pattern:</strong>
+                  <span class="analysis-value">${item.aiAnalysis.pattern}</span>
+                </div>
+              ` : ''}
+
+              ${item.aiAnalysis.formality ? `
+                <div class="analysis-row">
+                  <strong>Formality:</strong>
+                  <span class="analysis-value">${item.aiAnalysis.formality}</span>
+                </div>
+              ` : ''}
+
+              ${item.aiAnalysis.season && item.aiAnalysis.season.length > 0 ? `
+                <div class="analysis-row">
+                  <strong>Season:</strong>
+                  <span class="analysis-value">${item.aiAnalysis.season.join(', ')}</span>
+                </div>
+              ` : ''}
+
+              ${item.aiAnalysis.versatility_score !== undefined ? `
+                <div class="analysis-row">
+                  <strong>Versatility:</strong>
+                  <span class="analysis-value">${item.aiAnalysis.versatility_score}/10</span>
+                </div>
+              ` : ''}
+
+              ${item.aiAnalysis.description ? `
+                <div class="analysis-row description">
+                  <p>${item.aiAnalysis.description}</p>
+                </div>
+              ` : ''}
+            </div>
+          </details>
         ` : `
           <div class="item-analysis no-analysis">
             <span class="analysis-pending">⏳ Analysis pending...</span>
