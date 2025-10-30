@@ -63,6 +63,11 @@ export class ContentScriptManager {
         this.scoreBadgeManager = new ScoreBadgeManager();
         this.styleToggleController = new StyleToggleController(this);
 
+        // Inject ScoreBadgeManager into VisualIndicators for eye icon management
+        if (this.visualIndicators && this.scoreBadgeManager && typeof this.visualIndicators.setScoreBadgeManager === 'function') {
+            this.visualIndicators.setScoreBadgeManager(this.scoreBadgeManager);
+        }
+
         // Event management
         this.eventListeners = new EventListeners(this);
         this.processedImages = new Set();

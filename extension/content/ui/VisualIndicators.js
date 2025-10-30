@@ -14,6 +14,17 @@ export class VisualIndicators {
 
         // Initialize specialized overlay managers
         this.tryOnOverlays = new TryOnOverlays(this.overlayMap, this.updateHandlers);
+
+        // Reference to ScoreBadgeManager (injected by controller)
+        this.scoreBadgeManager = null;
+    }
+
+    /**
+     * Inject ScoreBadgeManager for eye icon management
+     * @param {Object} manager - instance of ScoreBadgeManager
+     */
+    setScoreBadgeManager(manager) {
+        this.scoreBadgeManager = manager;
     }
 
     /**
@@ -54,21 +65,21 @@ export class VisualIndicators {
         // Green border overlay is now disabled
         // const overlay = this.createGreenBorderOverlay();
 
-        // Create eye icon overlay for virtual try-on
-        const eyeIcon = this.tryOnOverlays.createEyeIconOverlay();
-
-        // Store alt text in eye icon for finding the live image element later
-        const altText = item.imageInfo?.alt || '';
-        eyeIcon.dataset.imageAltText = altText;
-
-        // Check if there's cached data and set appropriate initial state
-        const hasCachedData = this.tryOnOverlays.getCachedTryonData(eyeIcon);
-        if (hasCachedData) {
-            this.tryOnOverlays.updateEyeIconState(eyeIcon, 'cached');
+        // Create and show eye icon via ScoreBadgeManager (preferred path)
+        let eyeIcon = null;
+        if (this.scoreBadgeManager) {
+            eyeIcon = this.scoreBadgeManager.showEyeIcon(img);
+            const altText = item.imageInfo?.alt || '';
+            if (eyeIcon) {
+                eyeIcon.dataset.imageAltText = altText;
+            }
+        } else {
+            // Fallback to legacy TryOnOverlays if manager not injected
+            eyeIcon = this.tryOnOverlays.createEyeIconOverlay();
+            const altText = item.imageInfo?.alt || '';
+            eyeIcon.dataset.imageAltText = altText;
+            document.body.appendChild(eyeIcon);
         }
-
-        // Attach try-on handler to eye icon
-        this.tryOnOverlays.attachTryonHandler(eyeIcon, img, index);
 
         // Set data attributes
         // clothingItemDetected: 'true' = confirmed clothing item, 'false' = not clothing, undefined = not analyzed
@@ -79,16 +90,12 @@ export class VisualIndicators {
         // Add tooltip
         img.title = `Detected clothing item ${index + 1}`;
 
-        // Insert eye icon into document (overlay insertion removed)
-        // document.body.appendChild(overlay);
-        document.body.appendChild(eyeIcon);
+        // Inserted by ScoreBadgeManager.showEyeIcon() or legacy fallback above
 
-        // Store references and setup position updates (no overlay)
+        // Store references (no overlay). Position updates are handled by ScoreBadgeManager
         this.trackOverlay(img, null, index, eyeIcon);
-        this.setupPositionUpdates(img, null, eyeIcon);
 
-        // Position eye icon after ensuring image is loaded (no overlay)
-        this.ensureImageLoadedAndPosition(img, null, eyeIcon);
+        // Position handled by ScoreBadgeManager; legacy fallback handled above
 
         // Individual indicator logs removed - will show summary table instead
     }
