@@ -72,26 +72,9 @@ export class BaseProductMatcher {
             testSession.destroy();
             console.log('✅ Test session destroyed');
 
-            // Check if image classification API is available
-            console.log('🔧 Checking image classification API...');
-            this.isImageClassifierAvailable = typeof window !== 'undefined' &&
-                                              window.ai &&
-                                              typeof window.ai.createImageClassifier === 'function';
-
-            if (this.isImageClassifierAvailable) {
-                console.log('✅ Image classification API available');
-                // Test it
-                try {
-                    const testClassifier = await window.ai.createImageClassifier();
-                    testClassifier.destroy();
-                    console.log('✅ Image classification test successful');
-                } catch (error) {
-                    console.warn('⚠️ Image classification test failed:', error.message);
-                    this.isImageClassifierAvailable = false;
-                }
-            } else {
-                console.warn('⚠️ Image classification API not available - will use alt text only');
-            }
+            // Image classification explicitly disabled; rely on alt text only
+            this.isImageClassifierAvailable = false;
+            console.log('ℹ️ Image classification disabled; using alt text only');
 
             this.isInitialized = true;
             console.log('✅ Analyzer initialized successfully');
