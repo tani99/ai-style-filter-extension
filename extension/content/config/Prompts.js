@@ -14,6 +14,7 @@
  * @param {Array<string>} params.aestheticKeywords - Aesthetic keywords
  * @param {Array<string>} params.recommendedPatterns - Recommended patterns
  * @param {Array<string>} params.avoidPatterns - Patterns to avoid
+ * @param {boolean} [params.hasImageAttached=false] - Whether an image will be attached to the Prompt API call
  * @returns {string} Formatted prompt
  */
 export function buildProductAnalysisPrompt({
@@ -24,55 +25,45 @@ export function buildProductAnalysisPrompt({
     styleCategories,
     aestheticKeywords,
     recommendedPatterns,
-    avoidPatterns
+    avoidPatterns,
+    hasImageAttached = false
 }) {
-    return `Analyze this clothing item for style compatibility:
+    return `Rate how good the outfit in the attached image will look on the user based on their style profile.
 
-IMAGE CONTEXT:
-- Alt text: "${altText}"
-- ${imageContext}
-
-USER'S STYLE PROFILE:
-- Best colors: ${bestColors.join(', ')}
-${avoidColors.length > 0 ? `- Avoid colors: ${avoidColors.join(', ')}` : ''}
-- Style categories: ${styleCategories.join(', ')}
-- Aesthetic: ${aestheticKeywords.join(', ')}
-- Recommended patterns: ${recommendedPatterns.join(', ')}
-${avoidPatterns.length > 0 ? `- Avoid patterns: ${avoidPatterns.join(', ')}` : ''}
+USER'S STYLE PROFILE (what tends to look good on the user):
+- Best colors that flatter the user: ${bestColors.join(', ')}
+${avoidColors.length > 0 ? `- Colors to avoid on the user: ${avoidColors.join(', ')}` : ''}
+- Preferred style categories on the user: ${styleCategories.join(', ')}
+- User's aesthetic tendencies: ${aestheticKeywords.join(', ')}
+- Patterns that suit the user: ${recommendedPatterns.join(', ')}
+${avoidPatterns.length > 0 ? `- Patterns that usually don't suit the user: ${avoidPatterns.join(', ')}` : ''}
 
 TASK:
-Rate this item's compatibility with the user's style from 1-10. Be VERY STRICT and critical:
-- 1-3: Major conflicts with style (wrong colors, opposite aesthetic, clashing patterns)
-- 4-6: Partial conflicts or neutral (some mismatches with user's preferences)
-- 7-8: Good match (fits most style preferences but not exceptional)
-- 9-10: Perfect match (exceptional alignment with colors, patterns, and aesthetic - ONLY award these scores to items that truly excel)
+Judge whether the outfit in the image will look good on the user based on the style profile above. Provide a strict 1-10 rating and a concise reason:
+- 1-3: Unfavorable for the user (clashes with flattering colors/aesthetic; unflattering pattern/silhouette)
+- 4-6: Mixed/uncertain for the user (some alignment but notable mismatches)
+- 7-8: Likely to look good on the user (solid alignment with style profile)
+- 9-10: Excellent for the user (strong alignment; visually very flattering) — reserve for truly exceptional cases
 
-Be critical and selective. Most items should score 1-8. Only give 9-10 to items that are TRULY exceptional matches.
-
-ADDITIONALLY, provide a detailed description of this clothing item for virtual try-on image generation. Focus on:
+Then provide a detailed visual description of the garment for virtual try-on image generation. Focus on:
 - Type of garment (e.g., dress, shirt, pants, jacket, skirt)
-- Colors (primary and secondary colors, patterns)
-- Style details (cut, silhouette - e.g., A-line, bodycon, wrap, shift, straight-leg)
-- **FIT & SIZE DETAILS** (VERY IMPORTANT):
+- Colors (primary/secondary; patterns)
+- Style details (cut/silhouette — e.g., A-line, bodycon, wrap, shift, straight-leg)
+- FIT & SIZE DETAILS (very important):
   * Fit: tight/fitted/slim/regular/relaxed/loose/oversized/baggy
   * Length: cropped/short/knee-length/midi/maxi/ankle-length/floor-length/mini
   * Rise (for bottoms): low-rise/mid-rise/high-rise
   * Sleeve length: sleeveless/short-sleeve/three-quarter/long-sleeve
   * Overall proportions: how the garment sits on the body
 - Material appearance (e.g., denim, cotton, leather, knit, silk, satin, chiffon)
-- Key design features (e.g., buttons, zippers, pockets, ruffles, pleats, neckline style)
+- Key design features (e.g., buttons, zippers, pockets, ruffles, pleats, neckline)
 - Pattern/texture (e.g., solid, striped, floral, plaid, textured, ribbed)
 - Overall aesthetic (e.g., casual, formal, sporty, bohemian, minimalist, vintage)
 
 Respond in this exact format:
 SCORE: [number 1-10]
-REASON: [brief 1-sentence explanation]
-DESCRIPTION: [2-3 sentence detailed outfit description capturing all visual details, especially fit and length]
-
-Example response:
-SCORE: 8
-REASON: Navy blazer matches classic style and recommended colors well.
-DESCRIPTION: Navy blue fitted blazer in a structured cotton-blend fabric with notched lapels and silver button closure. Features long sleeves with functional cuff buttons and a cropped length hitting at the waist. Slim, tailored fit with two front flap pockets and classic professional aesthetic.`;
+REASON: [brief 1-sentence explanation tied to the user's style profile]
+DESCRIPTION: [2-3 sentence detailed visual description capturing fit, length, and key features]`;
 }
 
 /**

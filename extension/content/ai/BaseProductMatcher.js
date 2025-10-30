@@ -43,9 +43,10 @@ export class BaseProductMatcher {
 
             console.log('✅ Chrome Prompt API detected (window.LanguageModel available)');
 
-            // Check model availability
+			// Check model availability
             console.log('🔧 Checking model availability...');
-            const availability = await window.LanguageModel.availability();
+			const opts = { expectedInputs: [{ type: 'image' }] };
+			const availability = await window.LanguageModel.availability(opts);
             console.log('📊 Model availability:', availability);
 
             if (availability === 'no') {
@@ -59,20 +60,24 @@ export class BaseProductMatcher {
                 return false;
             }
 
-            console.log('✅ Model is available');
+			console.log('✅ Model is available');
 
-            // Test creating a session to verify it works
+			// Test creating a session to verify it works
             console.log('🔧 Testing session creation...');
-            const testSession = await window.LanguageModel.create({
-                temperature: 0,
-                topK: 5
-            });
+			const testSession = await window.LanguageModel.create({
+				expectedInputs: [{ type: 'image' }],
+				temperature: 0,
+				topK: 5
+			});
 
             console.log('✅ Test session created successfully');
             testSession.destroy();
             console.log('✅ Test session destroyed');
 
-            // Image classification explicitly disabled; rely on alt text only
+			// Track image modality availability for safe multimodal prompting
+			this.isImageModalityAvailable = true;
+
+			// Image classification explicitly disabled; rely on alt text only
             this.isImageClassifierAvailable = false;
             console.log('ℹ️ Image classification disabled; using alt text only');
 
@@ -331,18 +336,33 @@ export class BaseProductMatcher {
      */
     async _performAnalysis(productImage, options, cacheKey) {
         try {
-            // Build analysis prompt (using child's implementation)
-            const prompt = await this.buildPrompt(productImage, options);
+			// Prepare image (if available) first so prompt can reflect its presence
+			const imageValue = this.isImageModalityAvailable ? await this._getImageValueFromElement(productImage) : null;
 
-            // Create AI session (using official Prompt API)
-            const session = await window.LanguageModel.create({
-                temperature: 0,
-                topK: 5,
-                outputLanguage: 'en'
-            });
+			// Build analysis prompt (using child's implementation)
+			const prompt = await this.buildPrompt(productImage, { ...options, __hasImageAttached: !!imageValue });
 
-            // Get AI response
-            const response = await session.prompt(prompt);
+			// Create AI session (using official Prompt API)
+			// Use expectedInputs for image support (required by Prompt API)
+			const sessionOptions = {
+				temperature: 0,
+				topK: 5,
+				outputLanguage: 'en'
+			};
+
+			// Add expectedInputs for image support if available
+			if (this.isImageModalityAvailable && imageValue) {
+				sessionOptions.expectedInputs = [{ type: 'image' }];
+			}
+
+			const session = await window.LanguageModel.create(sessionOptions);
+
+
+			// Append multimodal content (text + image when available)
+			await this._appendTextAndOptionalImage(session, prompt, productImage, this.isImageModalityAvailable ? imageValue : null);
+
+			// Get AI response (the appended prompt is the actual question)
+			const response = await session.prompt('');
 
             // Clean up session
             session.destroy();
@@ -368,6 +388,80 @@ export class BaseProductMatcher {
             };
         }
     }
+
+	/**
+	 * Convert an HTMLImageElement to an ImageBitmap or Blob for Prompt API image input
+	 * @param {HTMLImageElement} productImage
+	 * @returns {Promise<ImageBitmap|Blob|null>}
+	 * @private
+	 */
+	async _getImageValueFromElement(productImage) {
+		let imageValue = null;
+		try {
+			if (productImage instanceof HTMLImageElement) {
+				// Check if image is cross-origin before attempting to create ImageBitmap
+				const src = productImage.currentSrc || productImage.src;
+				const isDataUrl = src.startsWith('data:');
+				const isSameOrigin = src.startsWith(window.location.origin) || isDataUrl;
+
+				if (!isSameOrigin) {
+					console.log('⚠️ Cross-origin image detected, fetching via background script:', src.substring(0, 60));
+					// Use background script to fetch cross-origin images with extension permissions
+					try {
+						const result = await chrome.runtime.sendMessage({
+							action: 'fetchImageAsBase64',
+							imageUrl: src
+						});
+
+						if (result.success && result.dataUrl) {
+							// Convert data URL to blob for Prompt API
+							const response = await fetch(result.dataUrl);
+							imageValue = await response.blob();
+							console.log('✅ Successfully fetched cross-origin image via background script');
+						} else {
+							console.log('⚠️ Background script fetch failed, falling back to text-only analysis');
+						}
+					} catch (fetchError) {
+						console.warn('⚠️ Cannot access cross-origin image:', fetchError.message);
+						// Return null to fall back to text-only
+						return null;
+					}
+				} else {
+					// Same-origin image, safe to use createImageBitmap
+					try {
+						imageValue = await createImageBitmap(productImage);
+					} catch (e) {
+						console.warn('⚠️ createImageBitmap failed:', e.message);
+					}
+				}
+			}
+		} catch (error) {
+			console.warn('⚠️ Image processing error:', error.message);
+			// Return null to continue with text-only analysis
+		}
+		return imageValue;
+	}
+
+	/**
+	 * Append a user message combining text and optional image to the session
+	 * @param {any} session
+	 * @param {string} prompt
+	 * @param {HTMLImageElement} productImage
+	 * @returns {Promise<void>}
+	 * @private
+	 */
+	async _appendTextAndOptionalImage(session, prompt, productImage, precomputedImageValue = null) {
+		const imageValue = precomputedImageValue ?? await this._getImageValueFromElement(productImage);
+		await session.append([
+			{
+				role: 'user',
+				content: [
+					{ type: 'text', value: prompt },
+					...(imageValue ? [{ type: 'image', value: imageValue }] : [])
+				]
+			}
+		]);
+	}
 
     /**
      * Analyze multiple products in batches

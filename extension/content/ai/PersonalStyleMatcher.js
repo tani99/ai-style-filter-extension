@@ -30,7 +30,7 @@ export class PersonalStyleMatcher extends BaseProductMatcher {
      * @private
      */
     async buildPrompt(productImage, options) {
-        const { styleProfile } = options;
+        const { styleProfile, __hasImageAttached } = options;
 
         // Extract key information from style profile
         const bestColors = styleProfile.color_palette?.best_colors || [];
@@ -45,7 +45,7 @@ export class PersonalStyleMatcher extends BaseProductMatcher {
         const imageContext = this.extractImageContext(productImage);
 
         // Use centralized prompt builder
-        return buildProductAnalysisPrompt({
+        const prompt = buildProductAnalysisPrompt({
             altText,
             imageContext,
             bestColors,
@@ -53,8 +53,10 @@ export class PersonalStyleMatcher extends BaseProductMatcher {
             styleCategories,
             aestheticKeywords,
             recommendedPatterns,
-            avoidPatterns
+            avoidPatterns,
+            hasImageAttached: !!__hasImageAttached
         });
+        return prompt;
     }
 
 
