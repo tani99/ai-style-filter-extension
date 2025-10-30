@@ -1522,7 +1522,21 @@ async function executeAIPromptWithImage(prompt, imageBlob, options = {}) {
         try {
             console.log(`AI prompt with image attempt ${attempt}/${maxRetries}`);
             console.log(`Prompt: ${prompt.substring(0, 100)}...`);
-            console.log(`Image: ${imageBlob.size} bytes, type: ${imageBlob.type}`);
+            // Compute a short content hash for diagnostics to verify distinct images per call
+            let imageHash = 'unknown';
+            try {
+                if (crypto && crypto.subtle && imageBlob && imageBlob.arrayBuffer) {
+                    const buf = await imageBlob.arrayBuffer();
+                    const digest = await crypto.subtle.digest('SHA-256', buf);
+                    const bytes = new Uint8Array(digest);
+                    let hex = '';
+                    for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
+                    imageHash = hex.slice(0, 16);
+                }
+            } catch (e) {
+                console.warn('Failed to hash image in background diagnostics:', e.message);
+            }
+            console.log(`Image: ${imageBlob.size} bytes, type: ${imageBlob.type}, hash: ${imageHash}`);
 
             // Check AI availability
             const availability = await checkChromeAIAvailability();
@@ -1562,6 +1576,14 @@ async function executeAIPromptWithImage(prompt, imageBlob, options = {}) {
                             ]
                         }
                     ]);
+
+                    // Post-append confirmation log to prove the image was attached
+                    console.log('✅ Background: image appended to session', {
+                        confirmed: true,
+                        hash: imageHash,
+                        size: imageBlob.size,
+                        type: imageBlob.type
+                    });
 
                     // Get the response
                     response = await session.prompt('Analyze this image based on the instructions provided.');

@@ -183,35 +183,24 @@ export class BaseProductMatcher {
             }
         }
 
-        // Check cache first (using child's cache key implementation)
-        const cacheKey = this.getCacheKey(productImage, options);
-        if (this.analysisCache.has(cacheKey)) {
-            const cached = this.analysisCache.get(cacheKey);
-
-            // VALIDATION: Ensure cached score is within valid range for this analyzer
-            if (cached.score && (cached.score < 1 || cached.score > this.maxScore)) {
-                console.warn(`⚠️ Invalid cached score ${cached.score} (expected 1-${this.maxScore}). Clearing stale cache entry.`);
-                this.analysisCache.delete(cacheKey);
-                // Continue to perform new analysis below
-            } else {
-                return { ...cached, cached: true };
-            }
-        }
+        // // Generate key for deduplication of in-flight analyses
+        // const cacheKey = this.getCacheKey(productImage, options);
 
         // Check if this product is already being analyzed
-        if (this.pendingAnalyses.has(cacheKey)) {
-            return await this.pendingAnalyses.get(cacheKey);
-        }
+        // if (this.pendingAnalyses.has(cacheKey)) {
+        //     return await this.pendingAnalyses.get(cacheKey);
+        // }
 
         // Create promise for this analysis (using child's implementation)
-        const analysisPromise = this._performAnalysis(productImage, options, cacheKey);
-        this.pendingAnalyses.set(cacheKey, analysisPromise);
+        const analysisPromise = this._performAnalysis(productImage, options);
+        // this.pendingAnalyses.set(cacheKey, analysisPromise);
 
         try {
             const result = await analysisPromise;
+            console.log('🔄 Analysis result:', result);
             return result;
         } finally {
-            this.pendingAnalyses.delete(cacheKey);
+            // this.pendingAnalyses.delete(cacheKey);
         }
     }
 
@@ -334,45 +323,60 @@ export class BaseProductMatcher {
      * @returns {Promise<Object>} Analysis result
      * @private
      */
-    async _performAnalysis(productImage, options, cacheKey) {
+    async _performAnalysis(productImage, options) {
         try {
 			// Prepare image (if available) first so prompt can reflect its presence
 			const imageValue = this.isImageModalityAvailable ? await this._getImageValueFromElement(productImage) : null;
-
+            console.log('🔍 Image value:', imageValue);
 			// Build analysis prompt (using child's implementation)
-			const prompt = await this.buildPrompt(productImage, { ...options, __hasImageAttached: !!imageValue });
+			const prompt = await this.buildPrompt(productImage, { ...options });
 
 			// Create AI session (using official Prompt API)
 			// Use expectedInputs for image support (required by Prompt API)
-			const sessionOptions = {
+
+
+			const session = await window.LanguageModel.create({
+                initialPrompts: [
+                    {
+                      role: 'system',
+                      content:
+                        'You are a skilled personal stylist who is good at analyzing what outfits would look good on a person based.',
+                    },
+                  ],
 				temperature: 0,
 				topK: 5,
-				outputLanguage: 'en'
-			};
-
-			// Add expectedInputs for image support if available
-			if (this.isImageModalityAvailable && imageValue) {
-				sessionOptions.expectedInputs = [{ type: 'image' }];
-			}
-
-			const session = await window.LanguageModel.create(sessionOptions);
+				outputLanguage: 'en',
+                expectedInputs: [{ type: 'image' }, { type: 'text' }]
+			});
 
 
 			// Append multimodal content (text + image when available)
-			await this._appendTextAndOptionalImage(session, prompt, productImage, this.isImageModalityAvailable ? imageValue : null);
-
+			await this._getImageValue(productImage);
+            await session.append([
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      value: `Here's one image`,
+                    },
+                    { type: 'image', value: imageValue },
+                  ],
+                },
+              ]);
 			// Get AI response (the appended prompt is the actual question)
-			const response = await session.prompt('');
-
+			const response = await session.prompt(prompt);
+            console.log('🔍 Session:', session);
+            // console.log('🔍 Cache key:', cacheKey);
+            console.log('🧪 Prompt length/hash:', prompt.length, this._hashString(prompt));
+            console.log('🧪 Image src used:', productImage.currentSrc || productImage.src);
+            console.log('🔍 Alt:', productImage.alt);
+            console.log('🔍 AI response from the session:', response);
             // Clean up session
             session.destroy();
 
             // Parse response (using child's implementation)
             const result = this.parseAnalysisResponse(response);
-
-            // Cache the result
-            this.cacheResult(cacheKey, result);
-
             return result;
 
         } catch (error) {
@@ -390,9 +394,10 @@ export class BaseProductMatcher {
     }
 
 	/**
-	 * Convert an HTMLImageElement to an ImageBitmap or Blob for Prompt API image input
+	 * Convert an HTMLImageElement to a File object for Prompt API image input
+	 * Chrome Prompt API requires File objects, not ImageBitmap or raw Blob
 	 * @param {HTMLImageElement} productImage
-	 * @returns {Promise<ImageBitmap|Blob|null>}
+	 * @returns {Promise<File|null>}
 	 * @private
 	 */
 	async _getImageValueFromElement(productImage) {
@@ -401,8 +406,11 @@ export class BaseProductMatcher {
 			if (productImage instanceof HTMLImageElement) {
 				// Check if image is cross-origin before attempting to create ImageBitmap
 				const src = productImage.currentSrc || productImage.src;
+                console.log('🔍 Image src:', src);
 				const isDataUrl = src.startsWith('data:');
 				const isSameOrigin = src.startsWith(window.location.origin) || isDataUrl;
+
+				let blob = null;
 
 				if (!isSameOrigin) {
 					console.log('⚠️ Cross-origin image detected, fetching via background script:', src.substring(0, 60));
@@ -413,26 +421,46 @@ export class BaseProductMatcher {
 							imageUrl: src
 						});
 
-						if (result.success && result.dataUrl) {
-							// Convert data URL to blob for Prompt API
-							const response = await fetch(result.dataUrl);
-							imageValue = await response.blob();
-							console.log('✅ Successfully fetched cross-origin image via background script');
-						} else {
-							console.log('⚠️ Background script fetch failed, falling back to text-only analysis');
-						}
+                        if (result.success && result.dataUrl) {
+                            // Convert data URL to blob
+                            const response = await fetch(result.dataUrl);
+                            blob = await response.blob();
+                            console.log('✅ Successfully fetched cross-origin image via background script, blob size:', blob.size);
+                        } else {
+                            console.warn('⚠️ Background script fetch returned no dataUrl or failed. Result:', result);
+                            console.log('⚠️ Falling back to text-only analysis');
+                        }
 					} catch (fetchError) {
 						console.warn('⚠️ Cannot access cross-origin image:', fetchError.message);
 						// Return null to fall back to text-only
 						return null;
 					}
 				} else {
-					// Same-origin image, safe to use createImageBitmap
+                    // Same-origin image - convert to blob via canvas
 					try {
-						imageValue = await createImageBitmap(productImage);
+						// Create canvas and draw the image
+						const canvas = document.createElement('canvas');
+						canvas.width = productImage.naturalWidth || productImage.width;
+						canvas.height = productImage.naturalHeight || productImage.height;
+						const ctx = canvas.getContext('2d');
+						ctx.drawImage(productImage, 0, 0);
+
+						// Create data URL then fetch it to obtain a Blob (matches background.js approach)
+						const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+						const response = await fetch(dataUrl);
+						blob = await response.blob();
+						console.log('✅ Same-origin image converted to blob via dataURL fetch, size:', blob.size, 'dimensions:', canvas.width, 'x', canvas.height);
 					} catch (e) {
-						console.warn('⚠️ createImageBitmap failed:', e.message);
+						console.warn('⚠️ Image to blob conversion failed:', e.message);
+						return null;
 					}
+				}
+
+				// Convert blob to File object (required by Prompt API)
+				if (blob) {
+					const fileName = `product-image-${Date.now()}.jpg`;
+					imageValue = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+					console.log('✅ Created File object:', fileName, 'type:', imageValue.type, 'size:', imageValue.size);
 				}
 			}
 		} catch (error) {
@@ -450,17 +478,48 @@ export class BaseProductMatcher {
 	 * @returns {Promise<void>}
 	 * @private
 	 */
-	async _appendTextAndOptionalImage(session, prompt, productImage, precomputedImageValue = null) {
-		const imageValue = precomputedImageValue ?? await this._getImageValueFromElement(productImage);
-		await session.append([
-			{
-				role: 'user',
-				content: [
-					{ type: 'text', value: prompt },
-					...(imageValue ? [{ type: 'image', value: imageValue }] : [])
-				]
+	async _getImageValue(productImage) {
+		const imageValue =  await this._getImageValueFromElement(productImage);
+        console.log('🔍 Image value:', imageValue);
+		// Diagnostics: print image details and a stable hash to verify uniqueness per query
+		let __imgHash = null;
+		if (imageValue) {
+			try {
+				__imgHash = await this._hashBlob(imageValue);
+				console.log('🧪 Preparing to attach image to session:', {
+					name: typeof imageValue.name === 'string' ? imageValue.name : '(no name)',
+					type: imageValue.type,
+					size: imageValue.size,
+					hash: __imgHash,
+					src: productImage.currentSrc || productImage.src
+				});
+			} catch (e) {
+				console.warn('⚠️ Failed to hash image for diagnostics:', e.message);
 			}
-		]);
+		} else {
+			console.error('❌ Image is required but was not available for this session. Aborting append.');
+			throw new Error('image_required');
+		}
+        return imageValue;
+		// await session.append([
+		// 	{
+		// 		role: 'user',
+		// 		content: [
+		// 			{ type: 'text', value: prompt },
+		// 			{ type: 'image', value: imageValue }
+		// 		]
+		// 	}
+		// ]);
+
+		// // Post-append confirmation log to prove the image was attached to the session
+		// if (imageValue) {
+		// 	console.log('✅ Image successfully appended to session message', {
+		// 		confirmed: true,
+		// 		hash: __imgHash,
+		// 		size: imageValue.size,
+		// 		type: imageValue.type
+		// 	});
+		// }
 	}
 
     /**
@@ -532,6 +591,51 @@ export class BaseProductMatcher {
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
+
+	/**
+	 * Compute a simple hash of a string for diagnostics
+	 * @private
+	 */
+	_hashString(str) {
+		let hash = 0;
+		for (let i = 0; i < str.length; i++) {
+			const chr = str.charCodeAt(i);
+			hash = ((hash << 5) - hash) + chr;
+			hash |= 0; // Convert to 32bit integer
+		}
+		return hash;
+	}
+
+	/**
+	 * Compute a short hash for a Blob/File's bytes for diagnostics
+	 * @param {Blob} blob
+	 * @returns {Promise<string>} hex-encoded hash
+	 * @private
+	 */
+	async _hashBlob(blob) {
+		const buffer = await blob.arrayBuffer();
+		// Use subtle crypto if available for consistent hashing
+		if (window.crypto && window.crypto.subtle && window.crypto.subtle.digest) {
+			const digest = await window.crypto.subtle.digest('SHA-256', buffer);
+			const bytes = new Uint8Array(digest);
+			let hex = '';
+			for (let i = 0; i < bytes.length; i++) {
+				const h = bytes[i].toString(16).padStart(2, '0');
+				hex += h;
+			}
+			// Shorten for logs
+			return hex.slice(0, 16);
+		}
+		// Fallback: simple rolling hash on first N bytes
+		const view = new Uint8Array(buffer);
+		let h = 0;
+		const len = Math.min(view.length, 65536);
+		for (let i = 0; i < len; i++) {
+			h = ((h << 5) - h) + view[i];
+			h |= 0;
+		}
+		return ('00000000' + (h >>> 0).toString(16)).slice(-8);
+	}
 
     /**
      * Generate detailed outfit description for virtual try-on

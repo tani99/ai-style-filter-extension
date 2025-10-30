@@ -754,6 +754,7 @@ export class ContentScriptManager {
         if (imagesToAnalyze.length === 0) {
             return; // No images need analysis
         }
+        
 
         console.log(`🎨 Triggering style analysis for ${imagesToAnalyze.length} images...`);
 
