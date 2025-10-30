@@ -2,10 +2,15 @@
  * ScoreBadgeManager - Manages score badges and visual effects
  * Handles progressive rendering, show/hide based on toggle state
  */
+import { GeometryUtils } from '../utils/GeometryUtils.js';
+
 export class ScoreBadgeManager {
     constructor() {
         // Track all active badges: Map<img element, badge element>
         this.activeBadges = new Map();
+
+        // Track all active eye icons: Map<img element, eye icon element>
+        this.activeEyeIcons = new Map();
 
         // Current visibility state (synced with toggle)
         this.isVisible = false;
@@ -609,13 +614,20 @@ export class ScoreBadgeManager {
      */
     updateAllPositions() {
         this.activeBadges.forEach((badge, img) => {
-            // Only reposition if image is still in DOM
             if (img.isConnected) {
                 this.positionBadge(badge, img);
             } else {
-                // Clean up badge for removed image
                 badge.remove();
                 this.activeBadges.delete(img);
+            }
+        });
+
+        this.activeEyeIcons.forEach((eyeIcon, img) => {
+            if (img.isConnected) {
+                this.positionEyeIcon(eyeIcon, img);
+            } else {
+                eyeIcon.remove();
+                this.activeEyeIcons.delete(img);
             }
         });
     }
@@ -635,6 +647,7 @@ export class ScoreBadgeManager {
      */
     cleanup() {
         this.hideAllBadges();
+        this.hideAllEyeIcons();
         // Event listeners will be automatically garbage collected
     }
 }
@@ -643,3 +656,90 @@ export class ScoreBadgeManager {
 if (typeof window !== 'undefined') {
     window.ScoreBadgeManager = ScoreBadgeManager;
 }
+
+// Eye icon support
+ScoreBadgeManager.prototype.createEyeIconElement = function() {
+    const eyeIcon = document.createElement('div');
+    eyeIcon.className = 'ai-style-eye-icon';
+    eyeIcon.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5C7 5 2.73 8.11 1 12.5C2.73 16.89 7 20 12 20C17 20 21.27 16.89 23 12.5C21.27 8.11 17 5 12 5ZM12 17.5C9.24 17.5 7 15.26 7 12.5C7 9.74 9.24 7.5 12 7.5C14.76 7.5 17 9.74 17 12.5C17 15.26 14.76 17.5 12 17.5ZM12 9.5C10.34 9.5 9 10.84 9 12.5C9 14.16 10.34 15.5 12 15.5C13.66 15.5 15 14.16 15 12.5C15 10.84 13.66 9.5 12 9.5Z" fill="white"/>
+        </svg>
+    `;
+    eyeIcon.style.cssText = `
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        background: rgba(16, 185, 129, 0.9);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10000;
+        pointer-events: auto;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s ease;
+        opacity: 0;
+    `;
+    eyeIcon.dataset.aiStyleEyeIcon = 'true';
+    eyeIcon.title = 'Click to generate virtual try-on';
+
+    eyeIcon.addEventListener('mouseenter', () => {
+        eyeIcon.style.transform = 'scale(1.1)';
+        eyeIcon.style.background = 'rgba(16, 185, 129, 1)';
+    });
+
+    eyeIcon.addEventListener('mouseleave', () => {
+        eyeIcon.style.transform = 'scale(1)';
+        eyeIcon.style.background = 'rgba(16, 185, 129, 0.9)';
+    });
+
+    return eyeIcon;
+};
+
+ScoreBadgeManager.prototype.positionElementRelativeToImage = function(element, img, corner = 'bottom-right', offset = { x: 45, y: 5 }, transform = null) {
+    GeometryUtils.positionElementRelativeToImage(element, img, corner, offset, transform);
+};
+
+ScoreBadgeManager.prototype.positionEyeIcon = function(eyeIcon, img) {
+    this.positionElementRelativeToImage(eyeIcon, img, 'bottom-right', { x: 45, y: 5 }, null);
+    setTimeout(() => {
+        eyeIcon.style.opacity = '1';
+    }, 100);
+};
+
+ScoreBadgeManager.prototype.showEyeIcon = function(img) {
+    if (this.activeEyeIcons.has(img)) {
+        const existing = this.activeEyeIcons.get(img);
+        if (!existing.isConnected) {
+            document.body.appendChild(existing);
+        }
+        this.positionEyeIcon(existing, img);
+        return existing;
+    }
+
+    const eyeIcon = this.createEyeIconElement();
+    this.positionEyeIcon(eyeIcon, img);
+    document.body.appendChild(eyeIcon);
+    this.activeEyeIcons.set(img, eyeIcon);
+    return eyeIcon;
+};
+
+ScoreBadgeManager.prototype.hideEyeIcon = function(img) {
+    const eyeIcon = this.activeEyeIcons.get(img);
+    if (!eyeIcon) return;
+    if (eyeIcon.parentNode) {
+        eyeIcon.remove();
+    }
+    this.activeEyeIcons.delete(img);
+};
+
+ScoreBadgeManager.prototype.hideAllEyeIcons = function() {
+    this.activeEyeIcons.forEach((eyeIcon, img) => {
+        if (eyeIcon && eyeIcon.parentNode) {
+            eyeIcon.remove();
+        }
+    });
+    this.activeEyeIcons.clear();
+};

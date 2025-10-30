@@ -706,6 +706,17 @@ export class ContentScriptManager {
                     const badgeCount = this.scoreBadgeManager.activeBadges.size;
                     console.log(`🎨 Style mode ON - ${badgeCount} badges currently displayed`);
                 }
+
+            // If all detected products have a valid src and none need triggering, stop background task
+            const allHaveValidSrc = this.detectedProducts.every(item => (item.imageInfo?.src || '').startsWith('http'));
+            const anyNeedsTrigger = this.detectedProducts.some(item => {
+                const src = item.imageInfo?.src || '';
+                return item.analysisStatus === 'not_started' && src.startsWith('http');
+            });
+            if (allHaveValidSrc && !anyNeedsTrigger) {
+                console.log('✅ All images have valid src and no analyses need triggering. Stopping background task.');
+                this.stopBackgroundTask();
+            }
             } else {
                 console.log('📸 No detected images found');
             }
