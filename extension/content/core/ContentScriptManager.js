@@ -914,16 +914,21 @@ export class ContentScriptManager {
                     return { overlay, cached: true };
                 }
 
-                // Get user photo from storage
-                const { userPhotos } = await chrome.storage.local.get('userPhotos');
-                if (!userPhotos || userPhotos.length === 0) {
+                // Get dedicated try-on photo from storage; fallback to first uploaded photo
+                const { tryonPhoto, userPhotos } = await chrome.storage.local.get(['tryonPhoto', 'userPhotos']);
+                let userPhotoData = tryonPhoto;
+
+                if (!userPhotoData && userPhotos && userPhotos.length > 0) {
+                    userPhotoData = userPhotos[0].data;
+                }
+
+                if (!userPhotoData) {
                     return {
-                        error: 'No user photo uploaded. Please add a photo in the extension popup.'
+                        error: 'No try-on photo found. Please upload your try-on photo in the extension.'
                     };
                 }
 
-                const userPhoto = userPhotos[0]; // Use first photo
-                console.log('📸 Using user photo for try-on generation');
+                console.log('📸 Using stored try-on photo for generation');
 
                 // Convert clothing image to base64
                 const clothingImageData = await this.fetchImageAsBase64(img.src);
@@ -934,7 +939,7 @@ export class ContentScriptManager {
                 // Call background script to generate try-on
                 const response = await chrome.runtime.sendMessage({
                     action: 'generateTryOn',
-                    userPhoto: userPhoto.data,
+                    userPhoto: userPhotoData,
                     clothingImage: clothingImageData,
                     options: {
                         temperature: 0

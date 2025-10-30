@@ -301,16 +301,13 @@ export class ScoreBadgeManager {
         // Determine background color based on score
         let backgroundColor;
         if (score >= 9) {
-            // Golden for perfect matches
+            // Yellow (golden) for top matches 9-10
             backgroundColor = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
         } else if (score >= 7) {
-            // Green for good matches
+            // Green for good matches 7-8
             backgroundColor = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        } else if (score >= 5) {
-            // Yellow for medium matches
-            backgroundColor = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
         } else {
-            // Red for low matches
+            // Red for low matches below 7
             backgroundColor = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
         }
 

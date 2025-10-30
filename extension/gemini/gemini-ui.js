@@ -114,14 +114,15 @@ async function updateUserPhotoSelect() {
 }
 
 // Update try-on button state
-function updateTryOnButton() {
+async function updateTryOnButton() {
     const testTryOnBtn = document.getElementById('testTryOnBtn');
-    const userPhotoSelect = document.getElementById('userPhotoSelect');
     const clothingImageInput = document.getElementById('clothingImageInput');
 
-    if (!testTryOnBtn || !userPhotoSelect || !clothingImageInput) return;
+    if (!testTryOnBtn || !clothingImageInput) return;
 
-    const hasUserPhoto = userPhotoSelect.value !== '';
+    // Enable when a try-on photo exists in storage
+    const { tryonPhoto } = await chrome.storage.local.get(['tryonPhoto']);
+    const hasUserPhoto = !!tryonPhoto;
     const hasClothingImage = clothingImageInput.files.length > 0;
 
     testTryOnBtn.disabled = !(hasUserPhoto && hasClothingImage);
@@ -130,17 +131,14 @@ function updateTryOnButton() {
 // Test virtual try-on
 async function testVirtualTryOn() {
     const testTryOnBtn = document.getElementById('testTryOnBtn');
-    const userPhotoSelect = document.getElementById('userPhotoSelect');
     const clothingImageInput = document.getElementById('clothingImageInput');
     const tryonResult = document.getElementById('tryonResult');
 
-    if (!testTryOnBtn || !userPhotoSelect || !clothingImageInput || !tryonResult) return;
-
-    const photoIndex = parseInt(userPhotoSelect.value);
+    if (!testTryOnBtn || !clothingImageInput || !tryonResult) return;
     const clothingFile = clothingImageInput.files[0];
 
-    if (isNaN(photoIndex) || !clothingFile) {
-        showNotification('Please select both a user photo and clothing image', 'error');
+    if (!clothingFile) {
+        showNotification('Please select a clothing image', 'error');
         return;
     }
 
@@ -148,12 +146,20 @@ async function testVirtualTryOn() {
     testTryOnBtn.textContent = 'Generating...';
 
     try {
-        // Get user photo
-        const photos = await getStoredPhotos();
-        const userPhoto = photos[photoIndex];
+        // Get dedicated try-on photo from storage
+        const { tryonPhoto } = await chrome.storage.local.get(['tryonPhoto']);
+        let userPhotoData = tryonPhoto;
 
-        if (!userPhoto) {
-            throw new Error('Selected photo not found');
+        // Fallback to first uploaded photo if no try-on photo set
+        if (!userPhotoData) {
+            const photos = await getStoredPhotos();
+            if (photos.length > 0) {
+                userPhotoData = photos[0].data;
+            }
+        }
+
+        if (!userPhotoData) {
+            throw new Error('No try-on photo found. Please upload your try-on photo in the extension.');
         }
 
         // Read clothing image
@@ -190,7 +196,7 @@ async function testVirtualTryOn() {
                 <div class="tryon-images-three">
                     <div class="image-container">
                         <h5>Your Photo</h5>
-                        <img src="${userPhoto.data}" alt="User photo" class="tryon-image">
+                        <img src="${userPhotoData}" alt="User photo" class="tryon-image">
                     </div>
                     <div class="image-container">
                         <h5>Clothing Item</h5>
@@ -213,7 +219,7 @@ async function testVirtualTryOn() {
         // Call background script to generate try-on
         const response = await chrome.runtime.sendMessage({
             action: 'generateTryOn',
-            userPhoto: userPhoto.data,
+            userPhoto: userPhotoData,
             clothingImage: clothingImageData,
             options: {
                 temperature: 0,
@@ -225,7 +231,7 @@ async function testVirtualTryOn() {
 
         if (response.success) {
             // Update the result with the generated image
-            displayTryOnResult(response, userPhoto.data, clothingImageData);
+            displayTryOnResult(response, userPhotoData, clothingImageData);
             showNotification('Try-on image generated successfully!', 'success');
         } else {
             throw new Error(response.error || 'Try-on generation failed');

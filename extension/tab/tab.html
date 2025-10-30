@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Style Dashboard</title>
     <link rel="stylesheet" href="tab.css">
+    <link rel="stylesheet" href="../gemini/gemini-styles.css">
     
 </head>
 <body>
@@ -101,7 +102,54 @@
                 </div>
             </section>
 
-            
+            <!-- Virtual Try-On (Gemini API) -->
+            <section class="tryon-section" id="tryonSection">
+                <h2>Virtual Try-On (Gemini)</h2>
+                <div class="tryon-content">
+                    <div class="gemini-status-item">
+                        <label>
+                            <span>Gemini API Status:</span>
+                            <span id="geminiStatus" class="status-indicator">Checking...</span>
+                        </label>
+                    </div>
+
+                    <!-- API Key Setup -->
+                    <div id="apiKeySetup" class="api-key-setup" style="display:none;">
+                        <p class="setup-info">Enter your Gemini API key to enable image try-on. You can get an API key from the Gemini Developer Console.</p>
+                        <div class="api-key-input-group">
+                            <input type="password" id="geminiAPIKeyInput" placeholder="Enter Gemini API key" autocomplete="off">
+                            <button id="showAPIKeyBtn" class="toggle-visibility-btn" title="Show/Hide">👁️</button>
+                            <button id="saveAPIKeyBtn" class="save-key-btn">Save API Key</button>
+                        </div>
+                        <p class="setup-help">Your key is stored locally in your browser using `chrome.storage`. <a href="https://ai.google.dev/" target="_blank">Learn more</a></p>
+                    </div>
+
+                    <!-- Try-On Photo Upload -->
+                    <div id="tryonPhotoSection" class="tryon-photo-section" style="display:none;">
+                        <h3>📸 Upload Your Try-On Photo</h3>
+                        <p>Upload a clear front-facing photo. This will be used for virtual try-on.</p>
+                        <p class="loading-note">When you browse websites, this is the photo of you that will be used to try clothes on.</p>
+
+                        <div id="tryonPhotoUploadArea" class="tryon-photo-upload-area">
+                            <div id="tryonPhotoPlaceholder" class="tryon-photo-placeholder">
+                                <div class="upload-icon">📤</div>
+                                <p>Click to upload your try-on photo</p>
+                                <small>JPG, PNG, or WebP. Up to 20MB.</small>
+                            </div>
+                            <input type="file" id="tryonPhotoInput" accept="image/jpeg,image/jpg,image/png,image/webp" style="display:none;">
+                        </div>
+
+                        <div id="tryonPhotoPreview" class="tryon-photo-preview" style="display:none;">
+                            <img id="tryonPhotoImage" alt="Try-on photo preview" />
+                            <div>
+                                <button id="removeTryonPhotoBtn" class="remove-tryon-photo-btn">Remove Photo</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    
+                </div>
+            </section>
 
             <!--Settings Section moved to the bottom -->
         </main>
@@ -292,6 +340,9 @@
 
     <!-- Main Tab Script -->
     <script src="tab.js"></script>
+
+    <!-- Gemini Try-On UI Script -->
+    <script src="../gemini/gemini-ui.js"></script>
 
     <!-- Wardrobe Authentication Module -->
     <script src="tab-wardrobe.js"></script>
