@@ -529,21 +529,73 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 // Wardrobe Analysis Functions
 
+// Helper function to compress image blobs for faster AI processing (service worker compatible)
+async function compressImageBlob(blob, maxDimension = 600, quality = 0.7) {
+    try {
+        // Use createImageBitmap which is available in service workers
+        const imageBitmap = await createImageBitmap(blob);
+
+        let { width, height } = imageBitmap;
+
+        // Calculate new dimensions while maintaining aspect ratio
+        if (width > height) {
+            if (width > maxDimension) {
+                height = (height * maxDimension) / width;
+                width = maxDimension;
+            }
+        } else {
+            if (height > maxDimension) {
+                width = (width * maxDimension) / height;
+                height = maxDimension;
+            }
+        }
+
+        // Use OffscreenCanvas which is available in service workers
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d');
+
+        // Draw the image at the new size
+        ctx.drawImage(imageBitmap, 0, 0, width, height);
+
+        // Convert to blob with compression
+        const compressedBlob = await canvas.convertToBlob({
+            type: 'image/jpeg',
+            quality: quality
+        });
+
+        console.log(`[Background] Compressed from ${blob.size} to ${compressedBlob.size} bytes (${Math.round(compressedBlob.size/blob.size*100)}%)`);
+
+        // Clean up
+        imageBitmap.close();
+
+        return compressedBlob;
+
+    } catch (error) {
+        console.warn(`[Background] Compression failed, using original image:`, error);
+        // If compression fails, return original blob
+        return blob;
+    }
+}
+
 // Analyze multiple photos for style profile generation with actual image inputs
 async function analyzeStyleProfileWithImages(photoDataUrls, photoCount, options = {}) {
     try {
         console.log(`[Background] Starting style profile analysis with ${photoDataUrls.length} images...`);
 
-        // Convert data URLs to Blobs
+        // Convert data URLs to Blobs and compress them for faster AI processing
         const photoBlobs = [];
         for (let i = 0; i < photoDataUrls.length; i++) {
             try {
                 const response = await fetch(photoDataUrls[i]);
                 const blob = await response.blob();
-                photoBlobs.push(blob);
-                console.log(`[Background] Converted photo ${i + 1}: ${blob.size} bytes, ${blob.type}`);
+
+                // Compress image to reduce AI processing time (600px max, 70% quality)
+                console.log(`[Background] Compressing photo ${i + 1} for AI analysis...`);
+                const compressedBlob = await compressImageBlob(blob, 600, 0.7);
+                photoBlobs.push(compressedBlob);
+                console.log(`[Background] Photo ${i + 1}: ${blob.size} → ${compressedBlob.size} bytes (${Math.round(compressedBlob.size/blob.size*100)}% of original)`);
             } catch (error) {
-                console.error(`[Background] Failed to convert photo ${i + 1}:`, error);
+                console.error(`[Background] Failed to process photo ${i + 1}:`, error);
             }
         }
 
@@ -551,7 +603,7 @@ async function analyzeStyleProfileWithImages(photoDataUrls, photoCount, options 
             throw new Error('Failed to process any photos for analysis');
         }
 
-        console.log(`[Background] Successfully converted ${photoBlobs.length} photos to blobs`);
+        console.log(`[Background] Successfully processed ${photoBlobs.length} photos for AI analysis`);
 
         // Create the style analysis prompt - PERSON-BASED (analyzes features, not current clothing)
         const prompt = `You are an expert fashion stylist and personal style consultant. I have uploaded ${photoBlobs.length} photos of a person. Please analyze the PERSON in these images - their physical features, coloring, and proportions - to create recommendations for what would look most flattering on them.
@@ -616,15 +668,18 @@ REMEMBER: Focus on what would be FLATTERING for this person based on their featu
 
 Respond with ONLY the JSON object, no additional text or formatting.`;
 
-        // Use the multi-image analysis function
+        // Use the multi-image analysis function with optimization:
+        // Process only the first 1-2 images for speed (more images = exponentially slower)
         let aiResult;
+        const maxImagesForAnalysis = Math.min(photoBlobs.length, 2); // Limit to 2 images max for performance
+        console.log(`[Background] Using ${maxImagesForAnalysis} of ${photoBlobs.length} images for AI analysis to optimize speed`);
 
-        if (photoBlobs.length === 1) {
-            // Single image - use single image analysis
+        if (maxImagesForAnalysis === 1) {
+            // Single image - much faster
             aiResult = await executeAIPromptWithImage(prompt, photoBlobs[0], options);
         } else {
-            // Multiple images - analyze them together
-            aiResult = await executeAIPromptWithMultipleImages(prompt, photoBlobs, options);
+            // 2 images - still reasonably fast
+            aiResult = await executeAIPromptWithMultipleImages(prompt, photoBlobs.slice(0, maxImagesForAnalysis), options);
         }
 
         if (!aiResult.success) {

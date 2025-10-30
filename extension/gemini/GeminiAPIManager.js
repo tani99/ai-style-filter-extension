@@ -508,12 +508,12 @@ class GeminiAPIManager {
         const { outfitDescription } = options;
 
         // Base prompt
-        let prompt = `The first image is an image of me. Generate an image of me wearing the clothing item in the second image.`;
+        let prompt = `Create a realistic image of me wearing the clothing from the second image. Keep my facial features, body shape, hairstyle, and skin tone consistent with the first image. Match the pose and lighting naturally. Maintain a clean, high-quality style that looks like a real photograph.`;
 
         // Add detailed outfit description if available
         if (outfitDescription) {
-            prompt += `\n\nThe clothing item is: ${outfitDescription}`;
-            prompt += `\n\nPlease accurately recreate all the details mentioned in the description, including colors, patterns, style, cut, and design features.`;
+            prompt += `\n\nThe clothing item is: ${outfitDescription}.`;
+            prompt += `\n\nAccurately recreate all details from the description — colors, materials, patterns, silhouette, cut, and design features — so the clothing appears true to the second image while fitting my body realistically.`;
         }
 
         return prompt;
