@@ -12,6 +12,12 @@ export class ScoreBadgeManager {
         // Track all active eye icons: Map<img element, eye icon element>
         this.activeEyeIcons = new Map();
 
+        // Track overlays created from eye icon clicks (toggle visibility)
+        this.eyeIconOverlays = new Map(); // Map<HTMLElement img, HTMLElement overlay>
+
+        // Optional external try-on generator: (img, eyeIcon) => Promise<{ overlay, cached?: boolean, error?: string }>
+        this.tryOnHandler = null;
+
         // Current visibility state (synced with toggle)
         this.isVisible = false;
 
@@ -723,6 +729,9 @@ ScoreBadgeManager.prototype.showEyeIcon = function(img) {
     this.positionEyeIcon(eyeIcon, img);
     document.body.appendChild(eyeIcon);
     this.activeEyeIcons.set(img, eyeIcon);
+
+    // Attach click/state handlers if available
+    this.attachEyeIconHandlers(eyeIcon, img);
     return eyeIcon;
 };
 
@@ -742,4 +751,152 @@ ScoreBadgeManager.prototype.hideAllEyeIcons = function() {
         }
     });
     this.activeEyeIcons.clear();
+};
+
+// Eye icon behavior/state/caching (Step 2)
+ScoreBadgeManager.prototype.setTryOnHandler = function(handler) {
+    this.tryOnHandler = typeof handler === 'function' ? handler : null;
+};
+
+ScoreBadgeManager.prototype.updateEyeIconState = function(eyeIcon, state) {
+    switch (state) {
+        case 'cached':
+            eyeIcon.style.background = 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)';
+            eyeIcon.style.boxShadow = '0 2px 8px rgba(251, 191, 36, 0.5), 0 0 15px rgba(251, 191, 36, 0.3)';
+            eyeIcon.title = 'Click to view cached virtual try-on';
+            break;
+        case 'loading':
+            eyeIcon.style.background = 'rgba(59, 130, 246, 0.9)';
+            eyeIcon.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.5)';
+            eyeIcon.title = 'Generating virtual try-on...';
+            this.ensureSpinnerAnimation();
+            break;
+        case 'close':
+            eyeIcon.style.background = 'rgba(239, 68, 68, 0.9)';
+            eyeIcon.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.5)';
+            eyeIcon.title = 'Click to close virtual try-on';
+            break;
+        case 'error':
+            eyeIcon.style.background = 'rgba(239, 68, 68, 0.9)';
+            eyeIcon.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.5)';
+            eyeIcon.title = 'Try-on generation failed';
+            break;
+        case 'default':
+        default:
+            eyeIcon.style.background = 'rgba(16, 185, 129, 0.9)';
+            eyeIcon.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+            eyeIcon.title = 'Click to generate virtual try-on';
+            break;
+    }
+};
+
+ScoreBadgeManager.prototype.ensureSpinnerAnimation = function() {
+    if (document.getElementById('spinner-animation-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'spinner-animation-styles';
+    style.textContent = `
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes eyeIconHover { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    `;
+    document.head.appendChild(style);
+};
+
+ScoreBadgeManager.prototype.getCachedTryonData = function(eyeIcon) {
+    const cached = eyeIcon.dataset.tryonCached;
+    const timestamp = eyeIcon.dataset.tryonTimestamp;
+    const imageUrl = eyeIcon.dataset.tryonImageUrl;
+    const imageData = eyeIcon.dataset.tryonImageData;
+
+    if (cached !== 'true' || !timestamp || !imageUrl) {
+        return null;
+    }
+
+    const cacheAge = Date.now() - parseInt(timestamp);
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    if (cacheAge >= maxAge) {
+        this.clearCachedTryonData(eyeIcon);
+        return null;
+    }
+
+    return { imageUrl, imageData, timestamp: parseInt(timestamp) };
+};
+
+ScoreBadgeManager.prototype.cacheTryonData = function(eyeIcon, imageUrl, imageData) {
+    eyeIcon.dataset.tryonCached = 'true';
+    eyeIcon.dataset.tryonImageUrl = imageUrl;
+    eyeIcon.dataset.tryonImageData = imageData || '';
+    eyeIcon.dataset.tryonTimestamp = Date.now().toString();
+    this.updateEyeIconState(eyeIcon, 'cached');
+};
+
+ScoreBadgeManager.prototype.clearCachedTryonData = function(eyeIcon) {
+    delete eyeIcon.dataset.tryonCached;
+    delete eyeIcon.dataset.tryonImageUrl;
+    delete eyeIcon.dataset.tryonImageData;
+    delete eyeIcon.dataset.tryonTimestamp;
+    this.updateEyeIconState(eyeIcon, 'default');
+};
+
+ScoreBadgeManager.prototype.attachEyeIconHandlers = function(eyeIcon, img) {
+    let autoCloseTimeout = null;
+
+    eyeIcon.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Toggle off if an overlay is already showing for this image
+        const existingOverlay = this.eyeIconOverlays.get(img);
+        if (existingOverlay && existingOverlay.parentNode) {
+            if (autoCloseTimeout) {
+                clearTimeout(autoCloseTimeout);
+                autoCloseTimeout = null;
+            }
+            existingOverlay.remove();
+            this.eyeIconOverlays.delete(img);
+
+            const hasCachedData = eyeIcon.dataset.tryonCached === 'true';
+            this.updateEyeIconState(eyeIcon, hasCachedData ? 'cached' : 'default');
+            return;
+        }
+
+        // If no handler is set, do nothing beyond visual feedback
+        if (!this.tryOnHandler) {
+            console.warn('No try-on handler set for ScoreBadgeManager');
+            return;
+        }
+
+        // Show loading state
+        this.updateEyeIconState(eyeIcon, 'loading');
+
+        try {
+            const result = await this.tryOnHandler(img, eyeIcon);
+
+            if (result && result.overlay instanceof HTMLElement) {
+                document.body.appendChild(result.overlay);
+                this.eyeIconOverlays.set(img, result.overlay);
+
+                // Switch to close state
+                this.updateEyeIconState(eyeIcon, 'close');
+
+                // Auto close after 5 seconds
+                autoCloseTimeout = setTimeout(() => {
+                    const overlay = this.eyeIconOverlays.get(img);
+                    if (overlay && overlay.parentNode) {
+                        overlay.remove();
+                        this.eyeIconOverlays.delete(img);
+                    }
+                    const hasCached = eyeIcon.dataset.tryonCached === 'true';
+                    this.updateEyeIconState(eyeIcon, hasCached ? 'cached' : 'default');
+                }, 5000);
+            } else if (result && result.error) {
+                this.updateEyeIconState(eyeIcon, 'error');
+            } else {
+                const hasCached = eyeIcon.dataset.tryonCached === 'true';
+                this.updateEyeIconState(eyeIcon, hasCached ? 'cached' : 'default');
+            }
+        } catch (err) {
+            console.error('Try-on handler error:', err);
+            this.updateEyeIconState(eyeIcon, 'error');
+        }
+    });
 };
