@@ -38,9 +38,8 @@ ${avoidPatterns.length > 0 ? `- Patterns that usually don't suit the user: ${avo
 
 TASK:
 Judge whether the outfit in the image will look good on the user based on the style profile above. Provide a strict 1-10 rating and a concise reason:
-- 1-3: Unfavorable for the user (clashes with flattering colors/aesthetic; unflattering pattern/silhouette)
-- 4-6: Mixed/uncertain for the user (some alignment but notable mismatches)
-- 7-8: Likely to look good on the user (solid alignment with style profile)
+- 1-4: Unfavorable for the user (clashes with flattering colors/aesthetic; unflattering pattern/silhouette)
+- 5-8: Mixed/uncertain for the user (some alignment but notable mismatches)
 - 9-10: Excellent for the user (strong alignment; visually very flattering) — reserve for truly exceptional cases
 
 Then provide a detailed visual description of the garment for virtual try-on image generation. Focus on:
