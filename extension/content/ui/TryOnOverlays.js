@@ -186,7 +186,7 @@ export class TryOnOverlays {
                 userPhoto: result.tryonPhoto,
                 clothingImage: clothingImageBase64,
                 options: {
-                    temperature: 0.7
+                    temperature: 0
                 }
             });
 

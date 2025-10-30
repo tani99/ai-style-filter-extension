@@ -230,7 +230,7 @@ class GeminiAPIManager {
                 imageConfig: {
                     aspectRatio: "3:4"  // Portrait aspect ratio for fashion photos
                 },
-                temperature: 1.0,
+                temperature: 0,
                 topK: 40,
                 topP: 0.95
             }

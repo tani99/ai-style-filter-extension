@@ -52,7 +52,7 @@ export class AltTextAnalyzer {
         try {
             // Create AI text session
             const session = await window.ai.createTextSession({
-                temperature: 0.1, // Low temperature for consistent classification
+                temperature: 0,
                 topK: 1
             });
 
@@ -262,7 +262,7 @@ Examples:
 
         try {
             const session = await window.ai.createTextSession({
-                temperature: 0.1,
+                temperature: 0,
                 topK: 1
             });
 

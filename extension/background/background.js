@@ -827,7 +827,7 @@ RULES FOR ACCURATE ANALYSIS:
 Respond with ONLY valid JSON, no markdown or extra text.`;
 
     const aiResult = await executeAIPromptWithImage(prompt, imageBlob, {
-      temperature: 0.7,
+      temperature: 0,
       maxRetries: 3
     });
 
@@ -1003,7 +1003,7 @@ Include the indices of items to ELIMINATE with reasons in the "eliminated" objec
 
     // Execute AI prompt
     const aiResult = await executeAIPrompt(filterPrompt, {
-      temperature: 0.7,
+      temperature: 0,
       maxRetries: 3
     });
 
@@ -1200,7 +1200,7 @@ IMPORTANT:
 
     // Execute AI prompt
     const aiResult = await executeAIPrompt(visualPrompt, {
-      temperature: 0.7,
+      temperature: 0,
       maxRetries: 3
     });
 
@@ -1349,7 +1349,7 @@ async function executeAIPrompt(prompt, options = {}) {
             if (typeof LanguageModel !== 'undefined') {
                 console.log('Using LanguageModel API for prompt...');
                 const sessionOptions = {
-                    temperature: options.temperature || 0.7,
+                    temperature: options.temperature ?? 0,
                     topK: options.topK || 40,
                     outputLanguage: 'en'
                 };
@@ -1367,7 +1367,7 @@ async function executeAIPrompt(prompt, options = {}) {
             else if (typeof window !== 'undefined' && window.ai) {
                 console.log('Using window.ai API for prompt...');
                 const sessionOptions = {
-                    temperature: options.temperature || 0.7,
+                    temperature: options.temperature ?? 0,
                     topK: options.topK || 40
                 };
                 
@@ -1439,7 +1439,7 @@ async function executeAIPromptWithMultipleImages(prompt, imageBlobs, options = {
                 try {
                     // Create session with image input support
                     const sessionOptions = {
-                        temperature: options.temperature || 0.7,
+                        temperature: options.temperature ?? 0,
                         topK: options.topK || 40,
                         expectedInputs: [{ type: "image" }],
                         outputLanguage: 'en'
@@ -1544,7 +1544,7 @@ async function executeAIPromptWithImage(prompt, imageBlob, options = {}) {
                 try {
                     // Create session with image input support
                     const sessionOptions = {
-                        temperature: options.temperature || 0.7,
+                        temperature: options.temperature ?? 0,
                         topK: options.topK || 40,
                         expectedInputs: [{ type: "image" }],
                         outputLanguage: 'en'

@@ -64,7 +64,7 @@ export class BaseProductMatcher {
             // Test creating a session to verify it works
             console.log('🔧 Testing session creation...');
             const testSession = await window.LanguageModel.create({
-                temperature: 0.3,
+                temperature: 0,
                 topK: 5
             });
 
@@ -336,7 +336,7 @@ export class BaseProductMatcher {
 
             // Create AI session (using official Prompt API)
             const session = await window.LanguageModel.create({
-                temperature: 0.1,
+                temperature: 0,
                 topK: 5,
                 outputLanguage: 'en'
             });
@@ -469,7 +469,7 @@ export class BaseProductMatcher {
 
             // Create AI session
             const session = await window.LanguageModel.create({
-                temperature: 0.7,  // Higher temperature for more creative descriptions
+                temperature: 0,
                 topK: 20,
                 outputLanguage: 'en'
             });

@@ -833,7 +833,7 @@ async function performMultiPhotoStyleAnalysis(photos) {
       photoDataUrls: photoUrls,
       photoCount: photos.length,
       options: {
-        temperature: 0.7,
+        temperature: 0,
         maxRetries: 3
       }
     });

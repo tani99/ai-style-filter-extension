@@ -216,7 +216,7 @@ async function testVirtualTryOn() {
             userPhoto: userPhoto.data,
             clothingImage: clothingImageData,
             options: {
-                temperature: 0.7,
+                temperature: 0,
                 outfitDescription: outfitDescription  // Include outfit description if available
             }
         });
