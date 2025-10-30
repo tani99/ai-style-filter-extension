@@ -1,5 +1,5 @@
 import { GeometryUtils } from '../utils/GeometryUtils.js';
-import { TryOnOverlays } from './TryOnOverlays.js';
+// TryOnOverlays removed; eye icon now managed by ScoreBadgeManager
 
 /**
  * VisualIndicators manages overlay elements that highlight detected products
@@ -11,9 +11,6 @@ export class VisualIndicators {
         this.overlayMap = new Map(); // Track overlays by image element
         this.updateHandlers = new Map(); // Track event handlers for cleanup
         this.globalUpdaterSetup = false; // Flag to ensure global updater is setup only once
-
-        // Initialize specialized overlay managers
-        this.tryOnOverlays = new TryOnOverlays(this.overlayMap, this.updateHandlers);
 
         // Reference to ScoreBadgeManager (injected by controller)
         this.scoreBadgeManager = null;
@@ -65,20 +62,11 @@ export class VisualIndicators {
         // Green border overlay is now disabled
         // const overlay = this.createGreenBorderOverlay();
 
-        // Create and show eye icon via ScoreBadgeManager (preferred path)
-        let eyeIcon = null;
-        if (this.scoreBadgeManager) {
-            eyeIcon = this.scoreBadgeManager.showEyeIcon(img);
-            const altText = item.imageInfo?.alt || '';
-            if (eyeIcon) {
-                eyeIcon.dataset.imageAltText = altText;
-            }
-        } else {
-            // Fallback to legacy TryOnOverlays if manager not injected
-            eyeIcon = this.tryOnOverlays.createEyeIconOverlay();
-            const altText = item.imageInfo?.alt || '';
+        // Create and show eye icon via ScoreBadgeManager
+        const eyeIcon = this.scoreBadgeManager ? this.scoreBadgeManager.showEyeIcon(img) : null;
+        const altText = item.imageInfo?.alt || '';
+        if (eyeIcon) {
             eyeIcon.dataset.imageAltText = altText;
-            document.body.appendChild(eyeIcon);
         }
 
         // Set data attributes
@@ -90,12 +78,12 @@ export class VisualIndicators {
         // Add tooltip
         img.title = `Detected clothing item ${index + 1}`;
 
-        // Inserted by ScoreBadgeManager.showEyeIcon() or legacy fallback above
+        // Inserted by ScoreBadgeManager.showEyeIcon()
 
         // Store references (no overlay). Position updates are handled by ScoreBadgeManager
         this.trackOverlay(img, null, index, eyeIcon);
 
-        // Position handled by ScoreBadgeManager; legacy fallback handled above
+        // Position handled by ScoreBadgeManager
 
         // Individual indicator logs removed - will show summary table instead
     }
@@ -313,16 +301,18 @@ export class VisualIndicators {
     removeImageIndicator(img) {
         const overlayData = this.overlayMap.get(img);
         if (overlayData) {
-            // Remove overlay if exists
-            if (overlayData.overlay && overlayData.overlay.parentNode) {
-                overlayData.overlay.remove();
-            }
+        // Remove overlay if exists
+        if (overlayData.overlay && overlayData.overlay.parentNode) {
+            overlayData.overlay.remove();
+        }
 
-
-            // Remove eye icon if exists
-            if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
-                overlayData.eyeIcon.remove();
-            }
+        // Remove eye icon via ScoreBadgeManager to keep state in sync
+        if (this.scoreBadgeManager && overlayData.img) {
+            this.scoreBadgeManager.hideEyeIcon(overlayData.img);
+        } else if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
+            // Fallback DOM removal if manager not injected
+            overlayData.eyeIcon.remove();
+        }
 
             // Remove from tracking (global handler will skip this image on next update)
             this.updateHandlers.delete(img);
@@ -345,7 +335,9 @@ export class VisualIndicators {
             if (overlayData.overlay && overlayData.overlay.parentNode) {
                 overlayData.overlay.remove();
             }
-            if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
+            if (this.scoreBadgeManager) {
+                this.scoreBadgeManager.hideEyeIcon(img);
+            } else if (overlayData.eyeIcon && overlayData.eyeIcon.parentNode) {
                 overlayData.eyeIcon.remove();
             }
 

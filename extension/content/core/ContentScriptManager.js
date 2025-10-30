@@ -475,6 +475,9 @@ export class ContentScriptManager {
     clearProductDetection() {
         this.visualIndicators.clearProductDetection();
         this.scoreBadgeManager.hideAllBadges(); // Clear score badges
+        if (this.scoreBadgeManager && typeof this.scoreBadgeManager.hideAllEyeIcons === 'function') {
+            this.scoreBadgeManager.hideAllEyeIcons();
+        }
         this.detectedProducts = [];
         this.processedImages.clear();
         this.lastDetectionResults = null;
