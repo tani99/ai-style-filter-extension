@@ -119,12 +119,23 @@ export class ProductSearchMatcher extends BaseProductMatcher {
     async buildPrompt(productImage, options) {
         const { userPrompt } = options;
 
-        // Image-only analysis: do not use alt text or image classification
-        const altText = '';
-        const imageContext = '';
-        const classificationInfo = '';
+        // Get image context
+        const altText = productImage.alt || '';
+        const imageContext = this.extractImageContext(productImage);
 
-        // Use centralized prompt builder (now image-only)
+        // Try to classify the actual image
+        const imageClassification = await this.classifyImage(productImage);
+
+        // Build classification info for the prompt
+        let classificationInfo = '';
+        if (imageClassification && imageClassification.classifications.length > 0) {
+            classificationInfo = '\nIMAGE CLASSIFICATION (AI analyzed actual image pixels):';
+            imageClassification.classifications.forEach((c, i) => {
+                classificationInfo += `\n  ${i + 1}. ${c.label} (${c.confidence}% confidence)`;
+            });
+        }
+
+        // Use centralized prompt builder
         return buildPromptRankingPrompt({
             userPrompt,
             altText,

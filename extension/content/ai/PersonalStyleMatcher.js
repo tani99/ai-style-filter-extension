@@ -40,11 +40,11 @@ export class PersonalStyleMatcher extends BaseProductMatcher {
         const avoidPatterns = styleProfile.pattern_preferences?.avoid_patterns || [];
         const aestheticKeywords = styleProfile.overall_aesthetic?.keywords || [];
 
-        // Image-only: do not include alt text or derived context
-        const altText = '';
-        const imageContext = '';
+        // Get image context
+        const altText = productImage.alt || '';
+        const imageContext = this.extractImageContext(productImage);
 
-        // Use centralized prompt builder (image-only)
+        // Use centralized prompt builder
         return buildProductAnalysisPrompt({
             altText,
             imageContext,
