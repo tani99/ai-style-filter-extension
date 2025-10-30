@@ -68,6 +68,9 @@ export class ContentScriptManager {
             this.visualIndicators.setScoreBadgeManager(this.scoreBadgeManager);
         }
 
+        // Set up try-on handler for ScoreBadgeManager
+        this.scoreBadgeManager.setTryOnHandler(this.createTryOnHandler());
+
         // Event management
         this.eventListeners = new EventListeners(this);
         this.processedImages = new Set();
@@ -694,6 +697,14 @@ export class ContentScriptManager {
                         updatedCount++;
                         console.log(`🔄 Updated image ${index + 1} (alt: "${altText}"): ${storedSrc} → ${currentSrc}`);
                     }
+
+                    // Ensure eye icon exists for this image (in case DOM element was replaced)
+                    // Use currentElement if available, otherwise fall back to item.element
+                    const elementForEyeIcon = currentElement || item.element;
+                    if (elementForEyeIcon && !this.scoreBadgeManager.activeEyeIcons.has(elementForEyeIcon)) {
+                        console.log(`👁️ Adding missing eye icon for image ${index + 1}`);
+                        this.scoreBadgeManager.showEyeIcon(elementForEyeIcon);
+                    }
                 });
 
                 if (updatedCount > 0) {
@@ -878,6 +889,102 @@ export class ContentScriptManager {
             clearInterval(this.backgroundTaskInterval);
             this.backgroundTaskInterval = null;
             console.log('⏹️ Background task stopped');
+        }
+    }
+
+    /**
+     * Create try-on handler for ScoreBadgeManager
+     * This handler is called when user clicks the eye icon to generate virtual try-on
+     * @returns {Function} Try-on handler function
+     */
+    createTryOnHandler() {
+        return async (img, eyeIcon) => {
+            console.log('👁️ Eye icon clicked - generating virtual try-on...');
+
+            try {
+                // Check for cached try-on data
+                const cachedData = this.scoreBadgeManager.getCachedTryonData(eyeIcon);
+                if (cachedData) {
+                    console.log('✅ Using cached try-on data');
+                    const overlay = this.scoreBadgeManager.createTryonResultOverlay(
+                        img,
+                        cachedData.imageUrl,
+                        true // isCached
+                    );
+                    return { overlay, cached: true };
+                }
+
+                // Get user photo from storage
+                const { userPhotos } = await chrome.storage.local.get('userPhotos');
+                if (!userPhotos || userPhotos.length === 0) {
+                    return {
+                        error: 'No user photo uploaded. Please add a photo in the extension popup.'
+                    };
+                }
+
+                const userPhoto = userPhotos[0]; // Use first photo
+                console.log('📸 Using user photo for try-on generation');
+
+                // Convert clothing image to base64
+                const clothingImageData = await this.fetchImageAsBase64(img.src);
+                if (!clothingImageData) {
+                    return { error: 'Failed to load clothing image' };
+                }
+
+                // Call background script to generate try-on
+                const response = await chrome.runtime.sendMessage({
+                    action: 'generateTryOn',
+                    userPhoto: userPhoto.data,
+                    clothingImage: clothingImageData,
+                    options: {
+                        temperature: 0
+                    }
+                });
+
+                console.log('Try-on response:', response);
+
+                if (response.success && response.imageUrl) {
+                    // Cache the result
+                    this.scoreBadgeManager.cacheTryonData(eyeIcon, response.imageUrl);
+
+                    // Create and return overlay
+                    const overlay = this.scoreBadgeManager.createTryonResultOverlay(
+                        img,
+                        response.imageUrl,
+                        false // isCached
+                    );
+
+                    return { overlay };
+                } else {
+                    return {
+                        error: response.error || 'Failed to generate try-on'
+                    };
+                }
+            } catch (err) {
+                console.error('❌ Try-on generation error:', err);
+                return {
+                    error: err.message || 'An unexpected error occurred'
+                };
+            }
+        };
+    }
+
+    /**
+     * Fetch image and convert to base64
+     * @param {string} imageUrl - URL of the image
+     * @returns {Promise<string>} Base64 data URL
+     */
+    async fetchImageAsBase64(imageUrl) {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: 'fetchImageAsBase64',
+                imageUrl: imageUrl
+            });
+
+            return response.success ? response.dataUrl : null;
+        } catch (error) {
+            console.error('Failed to fetch image:', error);
+            return null;
         }
     }
 }

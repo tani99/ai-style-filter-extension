@@ -656,6 +656,133 @@ export class ScoreBadgeManager {
         this.hideAllEyeIcons();
         // Event listeners will be automatically garbage collected
     }
+
+    /**
+     * Create loading overlay for try-on generation
+     * @param {HTMLImageElement} img - Original product image element
+     * @returns {HTMLElement} Loading overlay element
+     */
+    createLoadingOverlay(img) {
+        const overlay = document.createElement('div');
+        overlay.className = 'ai-style-tryon-loading-overlay';
+
+        // Get the size of the original product image (same size, not scaled)
+        const rect = img.getBoundingClientRect();
+        const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+        overlay.style.cssText = `
+            position: absolute;
+            top: ${rect.top + scrollY}px;
+            left: ${rect.left + scrollX}px;
+            width: ${rect.width}px;
+            height: ${rect.height}px;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Create spinner
+        const spinner = document.createElement('div');
+        spinner.className = 'ai-style-tryon-spinner';
+        spinner.style.cssText = `
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: ai-style-spin 1s linear infinite;
+            margin-bottom: 16px;
+        `;
+
+        // Create loading text
+        const loadingText = document.createElement('div');
+        loadingText.textContent = 'Generating...';
+        loadingText.style.cssText = `
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+        `;
+
+        overlay.appendChild(spinner);
+        overlay.appendChild(loadingText);
+        return overlay;
+    }
+
+    /**
+     * Create try-on result overlay for an image
+     * @param {HTMLImageElement} img - Original product image element
+     * @param {string} tryonImageUrl - URL of the try-on result image
+     * @param {boolean} isCached - Whether this is a cached result
+     * @returns {HTMLElement} Overlay element
+     */
+    createTryonResultOverlay(img, tryonImageUrl, isCached = false) {
+        const overlay = document.createElement('div');
+        overlay.className = 'ai-style-tryon-overlay';
+
+        // Get the size of the original product image (same size, not scaled)
+        const rect = img.getBoundingClientRect();
+        const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+        overlay.style.cssText = `
+            position: absolute;
+            top: ${rect.top + scrollY}px;
+            left: ${rect.left + scrollX}px;
+            width: ${rect.width}px;
+            height: ${rect.height}px;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Create try-on image with same dimensions as original
+        const tryonImg = document.createElement('img');
+        tryonImg.src = tryonImageUrl;
+        tryonImg.alt = 'Virtual try-on result';
+        tryonImg.setAttribute('data-ai-generated-tryon', 'true'); // Mark as AI-generated
+        tryonImg.style.cssText = `
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+        `;
+
+        // Add cache indicator if applicable
+        if (isCached) {
+            const cacheIndicator = document.createElement('div');
+            cacheIndicator.style.cssText = `
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                background: rgba(251, 191, 36, 0.9);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+            `;
+            cacheIndicator.textContent = 'Cached';
+            overlay.appendChild(cacheIndicator);
+        }
+
+        overlay.appendChild(tryonImg);
+        return overlay;
+    }
 }
 
 // Expose on window for debugging
@@ -865,11 +992,21 @@ ScoreBadgeManager.prototype.attachEyeIconHandlers = function(eyeIcon, img) {
             return;
         }
 
-        // Show loading state
+        // Show loading overlay
+        const loadingOverlay = this.createLoadingOverlay(img);
+        document.body.appendChild(loadingOverlay);
+        this.eyeIconOverlays.set(img, loadingOverlay);
+
+        // Show loading state on eye icon
         this.updateEyeIconState(eyeIcon, 'loading');
 
         try {
             const result = await this.tryOnHandler(img, eyeIcon);
+
+            // Remove loading overlay
+            if (loadingOverlay && loadingOverlay.parentNode) {
+                loadingOverlay.remove();
+            }
 
             if (result && result.overlay instanceof HTMLElement) {
                 document.body.appendChild(result.overlay);
@@ -889,13 +1026,20 @@ ScoreBadgeManager.prototype.attachEyeIconHandlers = function(eyeIcon, img) {
                     this.updateEyeIconState(eyeIcon, hasCached ? 'cached' : 'default');
                 }, 5000);
             } else if (result && result.error) {
+                this.eyeIconOverlays.delete(img);
                 this.updateEyeIconState(eyeIcon, 'error');
             } else {
+                this.eyeIconOverlays.delete(img);
                 const hasCached = eyeIcon.dataset.tryonCached === 'true';
                 this.updateEyeIconState(eyeIcon, hasCached ? 'cached' : 'default');
             }
         } catch (err) {
             console.error('Try-on handler error:', err);
+            // Remove loading overlay on error
+            if (loadingOverlay && loadingOverlay.parentNode) {
+                loadingOverlay.remove();
+            }
+            this.eyeIconOverlays.delete(img);
             this.updateEyeIconState(eyeIcon, 'error');
         }
     });

@@ -192,8 +192,8 @@ export class VisualIndicators {
                 if (overlay) {
                     this.positionOverlay(overlay, img);
                 }
-                if (eyeIcon) {
-                    this.tryOnOverlays.positionEyeIcon(eyeIcon, img);
+                if (eyeIcon && this.scoreBadgeManager) {
+                    this.scoreBadgeManager.positionEyeIcon(eyeIcon, img);
                 }
             } else {
                 console.warn('⚠️ Image has zero dimensions, skipping positioning', img);
@@ -278,8 +278,8 @@ export class VisualIndicators {
                         if (data.overlay) {
                             this.positionOverlay(data.overlay, data.img);
                         }
-                        if (data.eyeIcon) {
-                            this.tryOnOverlays.positionEyeIcon(data.eyeIcon, data.img);
+                        if (data.eyeIcon && this.scoreBadgeManager) {
+                            this.scoreBadgeManager.positionEyeIcon(data.eyeIcon, data.img);
                         }
                     }
                 }
@@ -364,8 +364,8 @@ export class VisualIndicators {
             if (overlayData.overlay) {
                 this.positionOverlay(overlayData.overlay, img);
             }
-            if (overlayData.eyeIcon) {
-                this.tryOnOverlays.positionEyeIcon(overlayData.eyeIcon, img);
+            if (overlayData.eyeIcon && this.scoreBadgeManager) {
+                this.scoreBadgeManager.positionEyeIcon(overlayData.eyeIcon, img);
             }
         });
     }
