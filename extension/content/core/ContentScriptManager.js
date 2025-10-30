@@ -82,6 +82,7 @@ export class ContentScriptManager {
 
         // Background task
         this.backgroundTaskInterval = null; // Interval ID for background task
+        this.isAnalyzing = false; // Lock to prevent concurrent analysis batches
 
         // Performance settings
         // Viewport analysis moved to separate module (ViewportAnalysis.js)
@@ -348,9 +349,7 @@ export class ContentScriptManager {
 
             // Src
             const src = item.imageInfo?.src || item.element?.src || 'No src';
-            const truncatedSrc = src.length > 23 ? src.substring(0, 20) + '...' : src.padEnd(23);
-
-            console.log(`│ ${(index + 1).toString().padStart(2)} │ ${truncatedAlt} │ ${status.padEnd(8)} │ ${analysisDisplay} │ ${scoreDisplay} │ ${truncatedReason} │ ${truncatedDescription} │ ${truncatedSrc} │`);
+            console.log(`│ ${(index + 1).toString().padStart(2)} │ ${truncatedAlt} │ ${status.padEnd(8)} │ ${analysisDisplay} │ ${scoreDisplay} │ ${truncatedReason} │ ${truncatedDescription} │ ${src} │`);
         });
 
         // Process rejected images (if any)
@@ -365,9 +364,7 @@ export class ContentScriptManager {
             const truncatedDescription = '-'.padEnd(32);
 
             const src = item.imageInfo?.src || item.element?.src || 'No src';
-            const truncatedSrc = src.length > 23 ? src.substring(0, 20) + '...' : src.padEnd(23);
-
-            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(2)} │ ${truncatedAlt} │ ${status.padEnd(8)} │ ${analysisDisplay} │ ${scoreDisplay} │ ${truncatedReason} │ ${truncatedDescription} │ ${truncatedSrc} │`);
+            console.log(`│ ${(detectedImages.length + index + 1).toString().padStart(2)} │ ${truncatedAlt} │ ${status.padEnd(8)} │ ${analysisDisplay} │ ${scoreDisplay} │ ${truncatedReason} │ ${truncatedDescription} │ ${src} │`);
         });
 
         // Footer
@@ -708,7 +705,9 @@ export class ContentScriptManager {
 
                 // Print summary table with updated analysis status
                 this.printImageDetectionSummary(this.detectedProducts, []);
-
+                this.detectedProducts.forEach((item, index) => {
+                    console.log(`Image ${index + 1}: ${item.imageInfo?.src}, ${item.imageInfo?.alt}, ${item.alt}`);
+                });
                 // Log badge status
                 if (this.isStyleModeOn) {
                     const badgeCount = this.scoreBadgeManager.activeBadges.size;
@@ -737,10 +736,24 @@ export class ContentScriptManager {
      * @private
      */
     runBackgroundAnalysis() {
+        // Prevent concurrent analysis batches
+        if (this.isAnalyzing) {
+            console.log('⏸️ Analysis already in progress, skipping this cycle');
+            return;
+        }
+
         // Check if we have a style profile to analyze against
         if (!this.styleProfile) {
             return; // Skip analysis if no style profile
         }
+
+        // Log current status of all images for debugging
+        const statusCounts = this.detectedProducts.reduce((acc, item) => {
+            const status = item.analysisStatus || 'undefined';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {});
+        console.log('📊 Image statuses:', statusCounts);
 
         // Find images that need analysis
         const imagesToAnalyze = this.detectedProducts.filter(item => {
@@ -752,71 +765,108 @@ export class ContentScriptManager {
         });
 
         if (imagesToAnalyze.length === 0) {
+            console.log('✅ No images need analysis (all done or in progress)');
             return; // No images need analysis
         }
         
 
         console.log(`🎨 Triggering style analysis for ${imagesToAnalyze.length} images...`);
 
-        // Fire off all analyses without waiting (concurrent execution)
-        imagesToAnalyze.forEach(item => {
-            // Mark as in progress immediately
+        // Mark all images as in_progress IMMEDIATELY to prevent re-analysis
+        imagesToAnalyze.forEach((item, index) => {
+            const src = item.imageInfo?.src || 'unknown';
+            console.log(`  📝 Marking image ${index + 1} as in_progress:`, src.substring(0, 60));
             item.analysisStatus = 'in_progress';
+        });
 
-            // Get the DOM element for analysis
-            const imgElement = item.element;
+        // Set analyzing flag to prevent concurrent batches
+        this.isAnalyzing = true;
 
-            if (!imgElement || !imgElement.complete) {
-                console.log(`⚠️ Image not ready for analysis: ${item.imageInfo?.alt || 'no alt'}`);
-                item.analysisStatus = 'not_started'; // Reset to retry later
-                return;
-            }
+        // IMPORTANT: Analyze sequentially to avoid Prompt API concurrency issues
+        // The Prompt API appears to cache/confuse image data when multiple sessions run concurrently
+        const analyzeSequentially = async () => {
+            try {
+                for (let i = 0; i < imagesToAnalyze.length; i++) {
+                const item = imagesToAnalyze[i];
 
-            // Show loading spinner if style mode is ON
-            if (this.isStyleModeOn) {
-                this.scoreBadgeManager.renderLoadingSpinner(imgElement);
-            }
+                // Get the DOM element for analysis
+                const imgElement = item.element;
 
-            // Fire off analysis (don't await - let it run in background)
-            this.personalStyleMatcher.analyzeProduct(
-                imgElement,
-                this.styleProfile
-            ).then(result => {
-                // Store the analysis results when complete
-                item.styleAnalysis = {
-                    score: result.score,
-                    reason: result.reasoning || result.reason,
-                    description: result.description || null
-                };
+                if (!imgElement || !imgElement.complete) {
+                    console.log(`⚠️ Image not ready for analysis: ${item.imageInfo?.alt || 'no alt'}`);
+                    item.analysisStatus = 'not_started'; // Reset to retry later
+                    continue;
+                }
 
-                // Mark as complete
-                item.analysisStatus = 'complete';
-
-                // Store score in DOM data attributes (for persistence)
-                this.scoreBadgeManager.storeScore(
-                    imgElement,
-                    result.score,
-                    result.reasoning || result.reason
-                );
-
-                // If style mode is ON, render badge immediately (progressive rendering)
+                // Show loading spinner if style mode is ON
                 if (this.isStyleModeOn) {
-                    this.scoreBadgeManager.renderBadge(
+                    this.scoreBadgeManager.renderLoadingSpinner(imgElement);
+                }
+
+                console.log(`  🔍 Analyzing image ${i + 1}/${imagesToAnalyze.length}...`);
+
+                try {
+                    // AWAIT each analysis to run sequentially
+                    const result = await this.personalStyleMatcher.analyzeProduct(
+                        imgElement,
+                        this.styleProfile
+                    );
+                    // Store the analysis results when complete
+                    item.styleAnalysis = {
+                        score: result.score,
+                        reason: result.reasoning || result.reason,
+                        description: result.description || null
+                    };
+
+                    // Mark as complete
+                    item.analysisStatus = 'complete';
+                    console.log(`  ✅ Marked as COMPLETE:`, item.imageInfo?.src?.substring(0, 60));
+
+                    // Store score in DOM data attributes (for persistence)
+                    this.scoreBadgeManager.storeScore(
                         imgElement,
                         result.score,
                         result.reasoning || result.reason
                     );
+
+                    // If style mode is ON, render badge immediately (progressive rendering)
+                    if (this.isStyleModeOn) {
+                        this.scoreBadgeManager.renderBadge(
+                            imgElement,
+                            result.score,
+                            result.reasoning || result.reason
+                        );
+                    }
+
+                    console.log(`✅ Analysis complete for "${item.imageInfo?.alt || 'no alt'}" - Score: ${result.score}/10`);
+
+                    // Longer delay between analyses to ensure session cleanup
+                    // The Prompt API needs significant time to fully clean up previous sessions
+                    // Without this, we see cross-contamination where different images get the same response
+                    if (i < imagesToAnalyze.length - 1) {
+                        console.log('  ⏳ Waiting 1s before next analysis...');
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                } catch (error) {
+                    console.error(`❌ Analysis failed for image: ${item.imageInfo?.alt || 'no alt'}`, error);
+                    // Reset to not_started so it can be retried
+                    item.analysisStatus = 'not_started';
                 }
+            }
 
-                console.log(`✅ Analysis complete for "${item.imageInfo?.alt || 'no alt'}" - Score: ${result.score}/10`);
-            }).catch(error => {
-                console.error(`❌ Analysis failed for image: ${item.imageInfo?.alt || 'no alt'}`, error);
-                // Reset to not_started so it can be retried
-                item.analysisStatus = 'not_started';
-            });
+                console.log(`✅ ${imagesToAnalyze.length} analyses completed`);
+            } finally {
+                // Release analyzing lock
+                this.isAnalyzing = false;
+                console.log('🔓 Analysis lock released');
+            }
+        };
+
+        // Execute and await the analysis to ensure lock is held until complete
+        analyzeSequentially().catch(error => {
+            console.error('❌ Batch analysis error:', error);
+            this.isAnalyzing = false; // Release lock on error
         });
-
-        console.log(`🎨 ${imagesToAnalyze.length} analyses triggered (running in background)`);
     }
 
     /**

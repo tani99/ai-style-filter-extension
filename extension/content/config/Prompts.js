@@ -14,11 +14,11 @@
  * @param {Array<string>} params.aestheticKeywords - Aesthetic keywords
  * @param {Array<string>} params.recommendedPatterns - Recommended patterns
  * @param {Array<string>} params.avoidPatterns - Patterns to avoid
+ * @param {boolean} [params.hasImageAttached=false] - Whether an image will be attached to the Prompt API call
  * @returns {string} Formatted prompt
  */
 export function buildProductAnalysisPrompt({
-    altText,
-    imageContext,
+
     bestColors,
     avoidColors,
     styleCategories,
@@ -26,7 +26,42 @@ export function buildProductAnalysisPrompt({
     recommendedPatterns,
     avoidPatterns,
 }) {
-    return `give me a one sentence description of the image you see attached. if there is no image tell me there is no image to see.`;
+    return `Rate how good the outfit in the attached image will look on the user based on their style profile.
+
+USER'S STYLE PROFILE (what tends to look good on the user):
+- Best colors that flatter the user: ${bestColors.join(', ')}
+${avoidColors.length > 0 ? `- Colors to avoid on the user: ${avoidColors.join(', ')}` : ''}
+- Preferred style categories on the user: ${styleCategories.join(', ')}
+- User's aesthetic tendencies: ${aestheticKeywords.join(', ')}
+- Patterns that suit the user: ${recommendedPatterns.join(', ')}
+${avoidPatterns.length > 0 ? `- Patterns that usually don't suit the user: ${avoidPatterns.join(', ')}` : ''}
+
+TASK:
+Judge whether the outfit in the image will look good on the user based on the style profile above. Provide a strict 1-10 rating and a concise reason:
+- 1-3: Unfavorable for the user (clashes with flattering colors/aesthetic; unflattering pattern/silhouette)
+- 4-6: Mixed/uncertain for the user (some alignment but notable mismatches)
+- 7-8: Likely to look good on the user (solid alignment with style profile)
+- 9-10: Excellent for the user (strong alignment; visually very flattering) — reserve for truly exceptional cases
+
+Then provide a detailed visual description of the garment for virtual try-on image generation. Focus on:
+- Type of garment (e.g., dress, shirt, pants, jacket, skirt)
+- Colors (primary/secondary; patterns)
+- Style details (cut/silhouette — e.g., A-line, bodycon, wrap, shift, straight-leg)
+- FIT & SIZE DETAILS (very important):
+  * Fit: tight/fitted/slim/regular/relaxed/loose/oversized/baggy
+  * Length: cropped/short/knee-length/midi/maxi/ankle-length/floor-length/mini
+  * Rise (for bottoms): low-rise/mid-rise/high-rise
+  * Sleeve length: sleeveless/short-sleeve/three-quarter/long-sleeve
+  * Overall proportions: how the garment sits on the body
+- Material appearance (e.g., denim, cotton, leather, knit, silk, satin, chiffon)
+- Key design features (e.g., buttons, zippers, pockets, ruffles, pleats, neckline)
+- Pattern/texture (e.g., solid, striped, floral, plaid, textured, ribbed)
+- Overall aesthetic (e.g., casual, formal, sporty, bohemian, minimalist, vintage)
+
+Respond in this exact format:
+SCORE: [number 1-10]
+REASON: [brief 1-sentence explanation tied to the user's style profile]
+DESCRIPTION: [2-3 sentence detailed visual description capturing fit, length, and key features]`;
 }
 
 /**

@@ -326,8 +326,24 @@ export class BaseProductMatcher {
     async _performAnalysis(productImage, options) {
         try {
 			// Prepare image (if available) first so prompt can reflect its presence
-			const imageValue = this.isImageModalityAvailable ? await this._getImageValueFromElement(productImage) : null;
-            console.log('🔍 Image value:', imageValue);
+			const imageSrc = productImage.currentSrc || productImage.src;
+		const urlHash = this._hashString(imageSrc);
+		console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+		console.log('🔍 NEW ANALYSIS - Image hash:', urlHash);
+		console.log('   URL:', imageSrc.substring(0, 100));
+
+		const imageValue = this.isImageModalityAvailable ? await this._getImageValue(productImage) : null;
+            console.log('🔍 Image value:', imageValue ? `Blob(${imageValue.size} bytes, ${imageValue.type})` : 'null');
+			// Log unique identifier for this specific image
+			if (imageValue) {
+				console.log('🔑 Blob size:', imageValue.size, 'bytes');
+
+				// CRITICAL TEST: Verify the blob actually contains different data
+				// Hash the blob bytes to ensure it's not the same image data
+				const blobHash = await this._hashBlob(imageValue);
+				console.log('🧬 Blob content hash:', blobHash, '(if same for all images, blob data is identical!)');
+			}
+
 			// Build analysis prompt (using child's implementation)
 			const prompt = await this.buildPrompt(productImage, { ...options });
 
@@ -336,13 +352,6 @@ export class BaseProductMatcher {
 
 
 			const session = await window.LanguageModel.create({
-                initialPrompts: [
-                    {
-                      role: 'system',
-                      content:
-                        'You are a skilled personal stylist who is good at analyzing what outfits would look good on a person based.',
-                    },
-                  ],
 				temperature: 0,
 				topK: 5,
 				outputLanguage: 'en',
@@ -350,30 +359,42 @@ export class BaseProductMatcher {
 			});
 
 
-			// Append multimodal content (text + image when available)
-			await this._getImageValue(productImage);
-            await session.append([
+			// Append multimodal content (image + text question)
+			// IMPORTANT: The full prompt must be in the append content, NOT in prompt() call
+			if (imageValue) {
+				console.log('✅ Appending IMAGE + PROMPT to session');
+				console.log('🔍 Image details - Size:', imageValue.size, 'Type:', imageValue.type);
+
+				await session.append([
                 {
                   role: 'user',
                   content: [
-                    {
-                      type: 'text',
-                      value: `Here's one image`,
-                    },
                     { type: 'image', value: imageValue },
+                    { type: 'text', value: prompt }  // Full question goes here WITH the image
                   ],
                 },
               ]);
-			// Get AI response (the appended prompt is the actual question)
-			const response = await session.prompt(prompt);
-            console.log('🔍 Session:', session);
-            // console.log('🔍 Cache key:', cacheKey);
-            console.log('🧪 Prompt length/hash:', prompt.length, this._hashString(prompt));
-            console.log('🧪 Image src used:', productImage.currentSrc || productImage.src);
-            console.log('🔍 Alt:', productImage.alt);
-            console.log('🔍 AI response from the session:', response);
-            // Clean up session
+			} else {
+				console.log('⚠️ TEXT ONLY - no image available');
+				await session.append([
+                {
+                  role: 'user',
+                  content: [{ type: 'text', value: prompt }],
+                },
+              ]);
+			}
+
+			// Get AI response - use empty string because question was in append above
+			console.log('📤 Calling prompt(\'\') to get response...');
+			const response = await session.prompt('');
+
+            console.log('✅ AI RESPONSE for image hash', urlHash, ':', response);
+            console.log('   Image URL:', imageSrc.substring(0, 80));
+            console.log('   Alt text:', productImage.alt);
+
+            // Clean up session immediately after getting response
             session.destroy();
+			console.log('🗑️ Session destroyed for image hash', urlHash);
 
             // Parse response (using child's implementation)
             const result = this.parseAnalysisResponse(response);
@@ -394,132 +415,116 @@ export class BaseProductMatcher {
     }
 
 	/**
-	 * Convert an HTMLImageElement to a File object for Prompt API image input
-	 * Chrome Prompt API requires File objects, not ImageBitmap or raw Blob
+	 * Get image as Blob for Prompt API
+	 * Chrome Prompt API accepts ImageBitmapSource (Blob, ImageBitmap, HTMLImageElement, etc.)
 	 * @param {HTMLImageElement} productImage
-	 * @returns {Promise<File|null>}
-	 * @private
-	 */
-	async _getImageValueFromElement(productImage) {
-		let imageValue = null;
-		try {
-			if (productImage instanceof HTMLImageElement) {
-				// Check if image is cross-origin before attempting to create ImageBitmap
-				const src = productImage.currentSrc || productImage.src;
-                console.log('🔍 Image src:', src);
-				const isDataUrl = src.startsWith('data:');
-				const isSameOrigin = src.startsWith(window.location.origin) || isDataUrl;
-
-				let blob = null;
-
-				if (!isSameOrigin) {
-					console.log('⚠️ Cross-origin image detected, fetching via background script:', src.substring(0, 60));
-					// Use background script to fetch cross-origin images with extension permissions
-					try {
-						const result = await chrome.runtime.sendMessage({
-							action: 'fetchImageAsBase64',
-							imageUrl: src
-						});
-
-                        if (result.success && result.dataUrl) {
-                            // Convert data URL to blob
-                            const response = await fetch(result.dataUrl);
-                            blob = await response.blob();
-                            console.log('✅ Successfully fetched cross-origin image via background script, blob size:', blob.size);
-                        } else {
-                            console.warn('⚠️ Background script fetch returned no dataUrl or failed. Result:', result);
-                            console.log('⚠️ Falling back to text-only analysis');
-                        }
-					} catch (fetchError) {
-						console.warn('⚠️ Cannot access cross-origin image:', fetchError.message);
-						// Return null to fall back to text-only
-						return null;
-					}
-				} else {
-                    // Same-origin image - convert to blob via canvas
-					try {
-						// Create canvas and draw the image
-						const canvas = document.createElement('canvas');
-						canvas.width = productImage.naturalWidth || productImage.width;
-						canvas.height = productImage.naturalHeight || productImage.height;
-						const ctx = canvas.getContext('2d');
-						ctx.drawImage(productImage, 0, 0);
-
-						// Create data URL then fetch it to obtain a Blob (matches background.js approach)
-						const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-						const response = await fetch(dataUrl);
-						blob = await response.blob();
-						console.log('✅ Same-origin image converted to blob via dataURL fetch, size:', blob.size, 'dimensions:', canvas.width, 'x', canvas.height);
-					} catch (e) {
-						console.warn('⚠️ Image to blob conversion failed:', e.message);
-						return null;
-					}
-				}
-
-				// Convert blob to File object (required by Prompt API)
-				if (blob) {
-					const fileName = `product-image-${Date.now()}.jpg`;
-					imageValue = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
-					console.log('✅ Created File object:', fileName, 'type:', imageValue.type, 'size:', imageValue.size);
-				}
-			}
-		} catch (error) {
-			console.warn('⚠️ Image processing error:', error.message);
-			// Return null to continue with text-only analysis
-		}
-		return imageValue;
-	}
-
-	/**
-	 * Append a user message combining text and optional image to the session
-	 * @param {any} session
-	 * @param {string} prompt
-	 * @param {HTMLImageElement} productImage
-	 * @returns {Promise<void>}
+	 * @returns {Promise<Blob|null>} Image as Blob or null if failed
 	 * @private
 	 */
 	async _getImageValue(productImage) {
-		const imageValue =  await this._getImageValueFromElement(productImage);
-        console.log('🔍 Image value:', imageValue);
-		// Diagnostics: print image details and a stable hash to verify uniqueness per query
-		let __imgHash = null;
-		if (imageValue) {
-			try {
-				__imgHash = await this._hashBlob(imageValue);
-				console.log('🧪 Preparing to attach image to session:', {
-					name: typeof imageValue.name === 'string' ? imageValue.name : '(no name)',
-					type: imageValue.type,
-					size: imageValue.size,
-					hash: __imgHash,
-					src: productImage.currentSrc || productImage.src
-				});
-			} catch (e) {
-				console.warn('⚠️ Failed to hash image for diagnostics:', e.message);
-			}
-		} else {
-			console.error('❌ Image is required but was not available for this session. Aborting append.');
-			throw new Error('image_required');
-		}
-        return imageValue;
-		// await session.append([
-		// 	{
-		// 		role: 'user',
-		// 		content: [
-		// 			{ type: 'text', value: prompt },
-		// 			{ type: 'image', value: imageValue }
-		// 		]
-		// 	}
-		// ]);
+		try {
+			const src = productImage.currentSrc || productImage.src;
+			console.log('🔍 Processing image from:', src.substring(0, 80));
 
-		// // Post-append confirmation log to prove the image was attached to the session
-		// if (imageValue) {
-		// 	console.log('✅ Image successfully appended to session message', {
-		// 		confirmed: true,
-		// 		hash: __imgHash,
-		// 		size: imageValue.size,
-		// 		type: imageValue.type
-		// 	});
-		// }
+			const isDataUrl = src.startsWith('data:');
+			const isSameOrigin = src.startsWith(window.location.origin) || isDataUrl;
+
+			let blob = null;
+
+			if (!isSameOrigin) {
+				// Cross-origin image: fetch via background script
+				console.log('⚠️ Cross-origin image detected, fetching via background script');
+				try {
+					const result = await chrome.runtime.sendMessage({
+						action: 'fetchImageAsBase64',
+						imageUrl: src
+					});
+
+					if (result.success && result.dataUrl) {
+						const response = await fetch(result.dataUrl);
+						blob = await response.blob();
+						console.log('✅ Cross-origin image fetched as blob:', blob.size, 'bytes, type:', blob.type);
+					} else {
+						console.warn('⚠️ Background script failed to fetch image');
+						return null;
+					}
+				} catch (fetchError) {
+					console.warn('⚠️ Cross-origin image fetch failed:', fetchError.message);
+					return null;
+				}
+			} else {
+				// Same-origin image: convert via canvas
+				console.log('📸 Converting same-origin image to blob');
+				try {
+					const canvas = document.createElement('canvas');
+					canvas.width = productImage.naturalWidth || productImage.width;
+					canvas.height = productImage.naturalHeight || productImage.height;
+
+					const ctx = canvas.getContext('2d');
+					ctx.drawImage(productImage, 0, 0);
+
+					// Convert to blob directly (more efficient than dataURL)
+					blob = await new Promise((resolve, reject) => {
+						canvas.toBlob(
+							(b) => b ? resolve(b) : reject(new Error('Canvas toBlob failed')),
+							'image/jpeg',
+							0.95
+						);
+					});
+
+					console.log('✅ Same-origin image converted to blob:', blob.size, 'bytes, dimensions:', canvas.width, 'x', canvas.height);
+				} catch (e) {
+					console.warn('⚠️ Canvas conversion failed:', e.message);
+					return null;
+				}
+			}
+
+			// Verify blob is valid
+			if (blob && blob.size > 0) {
+				console.log('✅ Image ready for Prompt API - Size:', blob.size, 'Type:', blob.type);
+
+				// Additional validation: Verify blob can be loaded as an image
+				try {
+					const testUrl = URL.createObjectURL(blob);
+					console.log('✅ Blob is valid - Object URL created:', testUrl.substring(0, 60));
+
+					// Test if blob is actually a valid image
+					const testImg = new Image();
+					await new Promise((resolve, reject) => {
+						testImg.onload = () => {
+							console.log('✅ Blob loaded as image successfully - Dimensions:', testImg.width, 'x', testImg.height);
+
+							// Warn if image is very large (might cause issues with Prompt API)
+							if (blob.size > 5 * 1024 * 1024) {  // > 5MB
+								console.warn('⚠️ Image blob is very large (>5MB):', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+								console.warn('   This might exceed Prompt API limits. Consider resizing.');
+							}
+
+							resolve();
+						};
+						testImg.onerror = () => {
+							console.error('❌ Blob is not a valid image - failed to load');
+							reject(new Error('Invalid image data'));
+						};
+						testImg.src = testUrl;
+					});
+
+					URL.revokeObjectURL(testUrl); // Clean up
+				} catch (e) {
+					console.error('❌ Blob validation failed:', e.message);
+					return null;
+				}
+
+				return blob;
+			} else {
+				console.warn('⚠️ Invalid blob created (size:', blob?.size, ')');
+				return null;
+			}
+
+		} catch (error) {
+			console.error('❌ _getImageValue failed:', error);
+			return null;
+		}
 	}
 
     /**
@@ -557,12 +562,20 @@ export class BaseProductMatcher {
 
             console.log(`📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} products)`);
 
-            // Analyze batch concurrently
-            const batchPromises = batch.map(img =>
-                this.analyze(img, analysisOptions)
-            );
+            // IMPORTANT: Analyze sequentially (one at a time) to avoid Prompt API concurrency issues
+            // Concurrent sessions seem to cache/confuse the image data
+            const batchResults = [];
+            for (let j = 0; j < batch.length; j++) {
+                console.log(`  🔍 Analyzing product ${i + j + 1}/${totalProducts}...`);
+                const result = await this.analyze(batch[j], analysisOptions);
+                batchResults.push(result);
 
-            const batchResults = await Promise.all(batchPromises);
+                // Small delay between analyses to ensure sessions are fully cleaned up
+                if (j < batch.length - 1) {
+                    await this.delay(100);
+                }
+            }
+
             results.push(...batchResults);
 
             // Call progress callback
