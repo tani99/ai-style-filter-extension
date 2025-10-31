@@ -1,81 +1,106 @@
 // Background service worker for AI Style-Based Shopping Filter + Virtual Try-On
 console.log('AI Style Filter background service worker started');
 
-// Import Firebase SDK (compat version for service workers)
-importScripts('/lib/firebase/firebase-app-compat.js');
-importScripts('/lib/firebase/firebase-auth-compat.js');
-importScripts('/lib/firebase/firebase-firestore-compat.js');
+// ============================================
+// FIREBASE INITIALIZATION (OPTIONAL)
+// ============================================
+// Set to true to enable Firebase features (wardrobe sync)
+// Set to false to run extension without Firebase
+// NOTE: Set to false if you don't have Firebase configured to prevent service worker errors
+const ENABLE_FIREBASE = false;
 
-// Import Firebase config
-importScripts('/config/firebase-config.js');
+let app = null;
+let auth = null;
+let db = null;
+let authManager = null;
+let wardrobeManager = null;
+let firebase = null;
+let firebaseConfig = null;
 
-// Import Firebase managers
-importScripts('/services/FirebaseAuthManager.js');
-importScripts('/services/FirestoreWardrobeManager.js');
+// Try to load Firebase if enabled
+if (ENABLE_FIREBASE) {
+  try {
+    console.log('🔥 Loading Firebase...');
 
-// Initialize Firebase
-let app;
-let auth;
-let db;
-let authManager;
-let wardrobeManager;
+    // Import Firebase SDK (compat version for service workers)
+    importScripts('/lib/firebase/firebase-app-compat.js');
+    importScripts('/lib/firebase/firebase-auth-compat.js');
+    importScripts('/lib/firebase/firebase-firestore-compat.js');
 
-try {
-  console.log('🔥 Initializing Firebase...');
-  app = firebase.initializeApp(firebaseConfig);
-  auth = firebase.auth();
-  db = firebase.firestore();
+    // Import Firebase config
+    importScripts('/config/firebase-config.js');
 
-  // Enable offline persistence
-  db.enablePersistence({ synchronizeTabs: true })
-    .then(() => {
-      console.log('✅ Firestore offline persistence enabled');
-    })
-    .catch((err) => {
-      if (err.code === 'failed-precondition') {
-        console.warn('⚠️ Multiple tabs open, persistence only enabled in first tab');
-      } else if (err.code === 'unimplemented') {
-        console.warn('⚠️ Browser does not support persistence');
-      } else {
-        console.error('❌ Persistence error:', err);
+    // Import Firebase managers
+    importScripts('/services/FirebaseAuthManager.js');
+    importScripts('/services/FirestoreWardrobeManager.js');
+
+    console.log('✅ Firebase scripts loaded successfully');
+
+    // Initialize Firebase
+    try {
+      console.log('🔥 Initializing Firebase...');
+      app = firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+
+      // Enable offline persistence
+      db.enablePersistence({ synchronizeTabs: true })
+        .then(() => {
+          console.log('✅ Firestore offline persistence enabled');
+        })
+        .catch((err) => {
+          if (err.code === 'failed-precondition') {
+            console.warn('⚠️ Multiple tabs open, persistence only enabled in first tab');
+          } else if (err.code === 'unimplemented') {
+            console.warn('⚠️ Browser does not support persistence');
+          } else {
+            console.error('❌ Persistence error:', err);
+          }
+        });
+
+      // Initialize auth manager
+      authManager = new FirebaseAuthManager(auth);
+
+      // Initialize wardrobe manager (callback will be set after analyzeWardrobeItem is defined)
+      wardrobeManager = new FirestoreWardrobeManager(db, null);
+
+      console.log('✅ Firebase initialized successfully');
+      console.log('📍 Project:', firebaseConfig.projectId);
+
+      // Set the analysis callback after analyzeWardrobeItem function is defined
+      if (wardrobeManager) {
+        wardrobeManager.analyzeItemCallback = (itemId, imageUrl, category) => {
+          return analyzeWardrobeItem(itemId, imageUrl, category);
+        };
       }
-    });
 
-  // Initialize auth manager
-  authManager = new FirebaseAuthManager(auth);
+      // Setup/cleanup Firestore listeners on auth state change
+      if (auth) {
+        auth.onAuthStateChanged(async (user) => {
+          if (user && wardrobeManager) {
+            console.log('👤 User authenticated, setting up Firestore listeners');
+            wardrobeManager.setupListeners(user.uid);
 
-  // Initialize wardrobe manager (callback will be set after analyzeWardrobeItem is defined)
-  wardrobeManager = new FirestoreWardrobeManager(db, null);
-
-  console.log('✅ Firebase initialized successfully');
-  console.log('📍 Project:', firebaseConfig.projectId);
-} catch (error) {
-  console.error('❌ Firebase initialization failed:', error);
-}
-
-// Set the analysis callback after analyzeWardrobeItem function is defined
-if (wardrobeManager) {
-  // We'll set this right before the analyzeWardrobeItem function definition
-  // using a wrapper that ensures the function exists
-  wardrobeManager.analyzeItemCallback = (itemId, imageUrl, category) => {
-    return analyzeWardrobeItem(itemId, imageUrl, category);
-  };
-}
-
-// Setup/cleanup Firestore listeners on auth state change
-auth.onAuthStateChanged(async (user) => {
-  if (user && wardrobeManager) {
-    console.log('👤 User authenticated, setting up Firestore listeners');
-    wardrobeManager.setupListeners(user.uid);
-
-    // Trigger wardrobe analysis on login
-    console.log('[Background] User logged in, starting wardrobe analysis...');
-    await analyzeAllWardrobeItems(user.uid);
-  } else if (wardrobeManager) {
-    console.log('👤 User logged out, cleaning up Firestore listeners');
-    wardrobeManager.cleanupListeners();
+            // Trigger wardrobe analysis on login
+            console.log('[Background] User logged in, starting wardrobe analysis...');
+            await analyzeAllWardrobeItems(user.uid);
+          } else if (wardrobeManager) {
+            console.log('👤 User logged out, cleaning up Firestore listeners');
+            wardrobeManager.cleanupListeners();
+          }
+        });
+      }
+    } catch (initError) {
+      console.error('❌ Firebase initialization failed:', initError);
+      console.warn('⚠️ Extension will continue without Firebase features');
+    }
+  } catch (importError) {
+    console.error('❌ Firebase import failed:', importError);
+    console.warn('⚠️ Extension will continue without Firebase features');
   }
-});
+} else {
+  console.log('ℹ️ Firebase disabled - running in standalone mode');
+}
 
 // Import Gemini API Manager (for Virtual Try-On features)
 importScripts('/gemini/GeminiAPIManager.js');
@@ -254,7 +279,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 dbInitialized: !!db,
                 authManagerInitialized: !!authManager,
                 wardrobeManagerInitialized: !!wardrobeManager,
-                projectId: firebaseConfig.projectId
+                projectId: firebaseConfig ? firebaseConfig.projectId : null
             });
             break;
 
